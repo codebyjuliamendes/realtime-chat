@@ -8,6 +8,9 @@ import express from 'express';
 import { createServer } from 'http';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import helmet from 'helmet';
+import cors from 'cors';
+import compression from 'compression';
 import { initializeWebSocket } from './socket.js';
 import { db, initDB } from './db.js';
 import { queryAll } from './db-helper.js';
@@ -16,6 +19,14 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const app = express();
 const server = createServer(app);
+
+try {
+  app.use(helmet({ contentSecurityPolicy: false }));
+  app.use(cors());
+  app.use(compression());
+} catch (error) {
+  console.error("Middleware error:", error);
+}
 
 app.use(express.static(path.join(__dirname, '..', 'public')));
 app.use(express.json());
@@ -111,7 +122,7 @@ app.use((err, req, res, next) => {
   });
 });
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3003;
 
 (async () => {
   try {

@@ -44,6 +44,8 @@ export async function initDB() {
     );
 
     CREATE INDEX IF NOT EXISTS idx_messages_channel ON messages(channel_id);
+    CREATE INDEX IF NOT EXISTS idx_messages_user ON messages(user_id);
+    CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON messages(timestamp);
   `);
 
   if (!fs.existsSync(dbPath)) {

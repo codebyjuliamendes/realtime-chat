@@ -20,7 +20,7 @@ template.innerHTML = `
         <div class="relative">
           <input type="text" placeholder="Search or start new chat" 
             class="w-full px-4 py-2 pl-9 bg-slate-950 border border-slate-800/80 focus:border-brand-500/50 outline-none rounded-xl text-slate-200 text-sm transition placeholder-slate-500">
-          <span class="absolute left-3 top-2.5 text-slate-500 text-xs">🔍</span>
+          <span class="absolute left-3 top-2.5 text-slate-500"><i data-lucide="search" class="w-4 h-4"></i></span>
         </div>
       </div>
       
@@ -35,7 +35,7 @@ template.innerHTML = `
       
       <!-- Reconnection Banner -->
       <div class="absolute top-0 left-0 right-0 py-2 px-4 bg-amber-500 text-slate-950 text-center text-sm font-semibold hidden z-50 transition-all duration-300" id="conn-banner">
-        ⚠️ Connection lost. Reconnecting...
+        <i data-lucide="alert-triangle" class="inline w-4 h-4 mr-1"></i> Connection lost. Reconnecting...
       </div>
       
       <!-- Chat Header -->
@@ -68,7 +68,7 @@ template.innerHTML = `
           id="message-input" placeholder="Type a message" autocomplete="off">
         <button class="bg-brand-600 hover:bg-brand-500 active:bg-brand-700 text-white font-medium w-11 h-11 rounded-xl flex items-center justify-center transition shadow-lg shadow-brand-600/20" 
           id="send-btn">
-          <span>➤</span>
+          <i data-lucide="send" class="w-4 h-4"></i>
         </button>
       </div>
       
@@ -100,6 +100,7 @@ class ChatApp extends HTMLElement {
     
     // Set template content into the innerHTML
     this.innerHTML = template.innerHTML;
+    if (window.lucide) window.lucide.createIcons();
     
     this.querySelector('#my-initial').textContent = username.charAt(0).toUpperCase();
     this.querySelector('#my-name').textContent = username;
@@ -113,6 +114,11 @@ class ChatApp extends HTMLElement {
   }
 
   async fetchInitialData() {
+    this.showSkeletons();
+    
+    // Simulate network delay to show off skeletons
+    await new Promise(r => setTimeout(r, 1200));
+
     try {
       // Fetch users
       const usersRes = await fetch('/api/users');
@@ -125,7 +131,43 @@ class ChatApp extends HTMLElement {
       this.messages.set('general', msgs);
     } catch (e) {
       console.error('Failed to fetch initial data', e);
+      if (window.showToast) window.showToast('Failed to load initial data', 'error');
     }
+  }
+
+  showSkeletons() {
+    const list = this.querySelector('#channel-list');
+    list.innerHTML = `
+      <div class="p-4 flex items-center gap-3 animate-pulse">
+        <div class="w-11 h-11 rounded-xl bg-slate-800"></div>
+        <div class="flex-1">
+          <div class="h-4 bg-slate-800 rounded w-1/2 mb-2"></div>
+          <div class="h-3 bg-slate-800 rounded w-3/4"></div>
+        </div>
+      </div>
+      <div class="p-4 flex items-center gap-3 animate-pulse">
+        <div class="w-11 h-11 rounded-xl bg-slate-800"></div>
+        <div class="flex-1">
+          <div class="h-4 bg-slate-800 rounded w-1/3 mb-2"></div>
+          <div class="h-3 bg-slate-800 rounded w-2/3"></div>
+        </div>
+      </div>
+    `;
+    
+    const messages = this.querySelector('#chat-messages');
+    messages.innerHTML = `
+      <div class="flex justify-start mb-4 animate-pulse">
+        <div class="w-2/3 h-16 bg-slate-800/80 rounded-2xl rounded-tl-none"></div>
+      </div>
+      <div class="flex justify-end mb-4 animate-pulse">
+        <div class="w-1/2 h-12 bg-emerald-800/40 rounded-2xl rounded-tr-none"></div>
+      </div>
+      <div class="flex justify-start mb-4 animate-pulse">
+        <div class="w-3/4 h-20 bg-slate-800/80 rounded-2xl rounded-tl-none"></div>
+      </div>
+    `;
+    this.querySelector('#chat-header').style.visibility = 'visible';
+    this.querySelector('#chat-input-area').style.visibility = 'visible';
   }
 
   connectWebSocket() {
