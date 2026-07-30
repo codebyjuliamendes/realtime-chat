@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Real-Time Chat System</title>
+  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div id="login-container">
+    <div class="login-box">
+      <h2>Welcome to Chat</h2>
+      <input type="text" id="username-input" placeholder="Enter your username" autocomplete="off" autofocus>
+      <button id="login-btn">Join Chat</button>
+    </div>
+  </div>
+  
+  <chat-app id="chat-app" style="display: none;"></chat-app>
+
+  <script src="components/chat-app.js" type="module"></script>
+  <script src="app.js" type="module"></script>
+</body>
+</html>
