@@ -1,303 +1,77 @@
 const template = document.createElement('template');
 template.innerHTML = `
-  <style>
-    :host {
-      display: flex;
-      width: 100%;
-      height: 100%;
-      background-color: var(--bg-color);
-      color: var(--text-primary);
-      overflow: hidden;
-    }
-    
-    /* Sidebar */
-    .sidebar {
-      width: 30%;
-      min-width: 250px;
-      max-width: 400px;
-      border-right: 1px solid var(--border-color);
-      display: flex;
-      flex-direction: column;
-      background-color: var(--bg-secondary);
-    }
-    
-    .sidebar-header {
-      padding: 1rem;
-      background-color: var(--bg-tertiary);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      border-bottom: 1px solid var(--border-color);
-    }
-    
-    .user-profile {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-    
-    .avatar {
-      width: 40px;
-      height: 40px;
-      border-radius: 50%;
-      background-color: var(--accent-color);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: bold;
-      font-size: 1.2rem;
-      position: relative;
-    }
-    
-    .status-dot {
-      width: 12px;
-      height: 12px;
-      border-radius: 50%;
-      position: absolute;
-      bottom: 0;
-      right: 0;
-      border: 2px solid var(--bg-tertiary);
-    }
-    .status-dot.online { background-color: var(--status-online); }
-    .status-dot.offline { background-color: var(--status-offline); }
-    
-    .search-bar {
-      padding: 0.5rem;
-      background-color: var(--bg-secondary);
-    }
-    .search-bar input {
-      width: 100%;
-      padding: 8px 12px;
-      border-radius: 8px;
-      border: none;
-      background-color: var(--bg-tertiary);
-      color: var(--text-primary);
-    }
-    
-    .channel-list {
-      flex: 1;
-      overflow-y: auto;
-    }
-    
-    .channel-item {
-      padding: 12px 1rem;
-      display: flex;
-      align-items: center;
-      gap: 15px;
-      cursor: pointer;
-      border-bottom: 1px solid var(--border-color);
-      transition: background-color 0.2s;
-    }
-    .channel-item:hover, .channel-item.active {
-      background-color: var(--bg-tertiary);
-    }
-    
-    .channel-info {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-    }
-    .channel-name {
-      font-weight: 500;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    .channel-last-msg {
-      font-size: 0.85rem;
-      color: var(--text-secondary);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    
-    /* Main Chat Area */
-    .chat-area {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      background-color: var(--bg-color);
-      position: relative;
-    }
-    
-    .chat-header {
-      padding: 1rem;
-      background-color: var(--bg-tertiary);
-      border-bottom: 1px solid var(--border-color);
-      display: flex;
-      align-items: center;
-      gap: 15px;
-    }
-    
-    .chat-messages {
-      flex: 1;
-      padding: 1rem;
-      overflow-y: auto;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-    
-    .message-container {
-      display: flex;
-      flex-direction: column;
-      max-width: 65%;
-      animation: slideIn 0.3s ease-out;
-    }
-    
-    .message-container.sent {
-      align-self: flex-end;
-    }
-    .message-container.received {
-      align-self: flex-start;
-    }
-    
-    .message-bubble {
-      padding: 8px 12px;
-      border-radius: 8px;
-      position: relative;
-      word-wrap: break-word;
-    }
-    
-    .sent .message-bubble {
-      background-color: var(--message-out);
-      border-top-right-radius: 0;
-    }
-    .received .message-bubble {
-      background-color: var(--message-in);
-      border-top-left-radius: 0;
-    }
-    
-    .message-meta {
-      display: flex;
-      justify-content: flex-end;
-      align-items: center;
-      gap: 5px;
-      font-size: 0.7rem;
-      color: var(--text-secondary);
-      margin-top: 4px;
-    }
-    
-    .message-status {
-      font-size: 0.7rem;
-    }
-    .status-read { color: #53bdeb; }
-    
-    .chat-input-area {
-      padding: 1rem;
-      background-color: var(--bg-tertiary);
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-    
-    .chat-input {
-      flex: 1;
-      padding: 12px;
-      border-radius: 8px;
-      border: none;
-      background-color: var(--bg-secondary);
-      color: var(--text-primary);
-      font-size: 1rem;
-    }
-    
-    .send-btn {
-      background-color: var(--accent-color);
-      color: white;
-      border: none;
-      border-radius: 50%;
-      width: 40px;
-      height: 40px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-    }
-    
-    .typing-indicator {
-      display: none;
-      padding: 0.5rem 1rem;
-      font-size: 0.85rem;
-      color: var(--text-secondary);
-      font-style: italic;
-    }
-    
-    .typing-dots span {
-      display: inline-block;
-      width: 4px;
-      height: 4px;
-      background-color: var(--text-secondary);
-      border-radius: 50%;
-      margin: 0 2px;
-      animation: bounce 1.4s infinite ease-in-out both;
-    }
-    .typing-dots span:nth-child(1) { animation-delay: -0.32s; }
-    .typing-dots span:nth-child(2) { animation-delay: -0.16s; }
-    
-    @keyframes slideIn {
-      from { transform: translateY(20px); opacity: 0; }
-      to { transform: translateY(0); opacity: 1; }
-    }
-    
-    @keyframes bounce {
-      0%, 80%, 100% { transform: scale(0); }
-      40% { transform: scale(1); }
-    }
-    
-    .connection-banner {
-      position: absolute;
-      top: 0;
-      width: 100%;
-      padding: 0.5rem;
-      background-color: #ff9800;
-      color: #fff;
-      text-align: center;
-      font-size: 0.9rem;
-      display: none;
-      z-index: 10;
-    }
-  </style>
-
-  <div class="sidebar">
-    <div class="sidebar-header">
-      <div class="user-profile">
-        <div class="avatar" id="my-avatar">
-          <span id="my-initial"></span>
-          <div class="status-dot online"></div>
+  <div class="flex w-full h-full bg-slate-950 text-slate-100 overflow-hidden font-sans">
+    <!-- Sidebar -->
+    <div class="w-1/3 min-w-[280px] max-w-[400px] border-r border-slate-800/80 flex flex-col bg-slate-900">
+      
+      <!-- User profile header -->
+      <div class="p-4 bg-slate-900 border-b border-slate-800 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="relative w-10 h-10 rounded-full bg-brand-600 flex items-center justify-center font-bold text-white shadow-md shadow-brand-600/20" id="my-avatar">
+            <span id="my-initial">-</span>
+            <div class="absolute bottom-0 right-0 w-3 h-3 bg-brand-500 rounded-full border-2 border-slate-900"></div>
+          </div>
+          <span class="font-semibold text-slate-200" id="my-name">-</span>
         </div>
-        <span id="my-name"></span>
       </div>
-    </div>
-    <div class="search-bar">
-      <input type="text" placeholder="Search or start new chat">
-    </div>
-    <div class="channel-list" id="channel-list">
-      <!-- Channels go here -->
-    </div>
-  </div>
-
-  <div class="chat-area">
-    <div class="connection-banner" id="conn-banner">Reconnecting...</div>
-    <div class="chat-header" id="chat-header" style="visibility: hidden;">
-      <div class="avatar" id="current-channel-avatar">#</div>
-      <div class="channel-info">
-        <div class="channel-name" id="current-channel-name">Channel Name</div>
-        <div class="channel-last-msg" id="current-channel-status">Click to view details</div>
+      
+      <!-- Search bar -->
+      <div class="p-3 bg-slate-900/50">
+        <div class="relative">
+          <input type="text" placeholder="Search or start new chat" 
+            class="w-full px-4 py-2 pl-9 bg-slate-950 border border-slate-800/80 focus:border-brand-500/50 outline-none rounded-xl text-slate-200 text-sm transition placeholder-slate-500">
+          <span class="absolute left-3 top-2.5 text-slate-500 text-xs">🔍</span>
+        </div>
+      </div>
+      
+      <!-- Channel List -->
+      <div class="flex-1 overflow-y-auto divide-y divide-slate-800/30" id="channel-list">
+        <!-- Channels render here dynamically -->
       </div>
     </div>
     
-    <div class="chat-messages" id="chat-messages">
-      <!-- Messages go here -->
-    </div>
-    
-    <div class="typing-indicator" id="typing-indicator">
-      Someone is typing <span class="typing-dots"><span></span><span></span><span></span></span>
-    </div>
-    
-    <div class="chat-input-area" id="chat-input-area" style="visibility: hidden;">
-      <input type="text" class="chat-input" id="message-input" placeholder="Type a message" autocomplete="off">
-      <button class="send-btn" id="send-btn">➤</button>
+    <!-- Main Chat Area -->
+    <div class="flex-1 flex flex-col bg-slate-950 relative">
+      
+      <!-- Reconnection Banner -->
+      <div class="absolute top-0 left-0 right-0 py-2 px-4 bg-amber-500 text-slate-950 text-center text-sm font-semibold hidden z-50 transition-all duration-300" id="conn-banner">
+        ⚠️ Connection lost. Reconnecting...
+      </div>
+      
+      <!-- Chat Header -->
+      <div class="p-4 bg-slate-900 border-b border-slate-800 flex items-center gap-3 z-10" id="chat-header" style="visibility: hidden;">
+        <div class="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center font-bold text-brand-500 border border-slate-700" id="current-channel-avatar">#</div>
+        <div class="flex flex-col overflow-hidden">
+          <span class="font-semibold text-slate-100" id="current-channel-name">Channel Name</span>
+          <span class="text-xs text-slate-400" id="current-channel-status">Click to view details</span>
+        </div>
+      </div>
+      
+      <!-- Chat Messages Scroll Container -->
+      <div class="flex-1 p-6 overflow-y-auto flex flex-col gap-4 bg-slate-950/40 relative" id="chat-messages">
+        <!-- Messages go here -->
+      </div>
+      
+      <!-- Typing Indicator -->
+      <div class="px-6 py-2 text-xs text-slate-400 italic hidden flex items-center gap-2" id="typing-indicator">
+        Someone is typing
+        <span class="inline-flex gap-1 items-center">
+          <span class="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce"></span>
+          <span class="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce [animation-delay:0.2s]"></span>
+          <span class="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce [animation-delay:0.4s]"></span>
+        </span>
+      </div>
+      
+      <!-- Chat Input Area -->
+      <div class="p-4 bg-slate-900 border-t border-slate-800 flex items-center gap-3" id="chat-input-area" style="visibility: hidden;">
+        <input type="text" class="flex-1 px-4 py-3 bg-slate-950 border border-slate-800 focus:border-brand-500/50 outline-none rounded-xl text-slate-200 text-sm transition placeholder-slate-500" 
+          id="message-input" placeholder="Type a message" autocomplete="off">
+        <button class="bg-brand-600 hover:bg-brand-500 active:bg-brand-700 text-white font-medium w-11 h-11 rounded-xl flex items-center justify-center transition shadow-lg shadow-brand-600/20" 
+          id="send-btn">
+          <span>➤</span>
+        </button>
+      </div>
+      
     </div>
   </div>
 `;
@@ -305,9 +79,7 @@ template.innerHTML = `
 class ChatApp extends HTMLElement {
   constructor() {
     super();
-    this.attachShadow({ mode: 'open' });
-    this.shadowRoot.appendChild(template.content.cloneNode(true));
-    
+    // We render inside Light DOM so Tailwind v3 styles apply globally!
     this.userId = null;
     this.username = null;
     this.ws = null;
@@ -326,8 +98,11 @@ class ChatApp extends HTMLElement {
     this.userId = userId;
     this.username = username;
     
-    this.shadowRoot.getElementById('my-initial').textContent = username.charAt(0).toUpperCase();
-    this.shadowRoot.getElementById('my-name').textContent = username;
+    // Set template content into the innerHTML
+    this.innerHTML = template.innerHTML;
+    
+    this.querySelector('#my-initial').textContent = username.charAt(0).toUpperCase();
+    this.querySelector('#my-name').textContent = username;
     
     this.setupEventListeners();
     this.fetchInitialData().then(() => {
@@ -355,13 +130,13 @@ class ChatApp extends HTMLElement {
 
   connectWebSocket() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = \`\${protocol}//\${window.location.host}\`;
+    const wsUrl = `${protocol}//${window.location.host}`;
     
     this.ws = new WebSocket(wsUrl);
     
     this.ws.onopen = () => {
       this.reconnectAttempts = 0;
-      this.shadowRoot.getElementById('conn-banner').style.display = 'none';
+      this.querySelector('#conn-banner').classList.add('hidden');
       
       // Authenticate
       this.ws.send(JSON.stringify({
@@ -371,8 +146,12 @@ class ChatApp extends HTMLElement {
     };
     
     this.ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      this.handleWebSocketMessage(data);
+      try {
+        const data = JSON.parse(event.data);
+        this.handleWebSocketMessage(data);
+      } catch (err) {
+        console.error('Error handling ws message:', err);
+      }
     };
     
     this.ws.onclose = () => {
@@ -385,14 +164,14 @@ class ChatApp extends HTMLElement {
   }
 
   handleDisconnect() {
-    this.shadowRoot.getElementById('conn-banner').style.display = 'block';
+    this.querySelector('#conn-banner').classList.remove('hidden');
     
     if (this.reconnectAttempts < this.maxReconnectAttempts) {
       const delay = this.baseReconnectDelay * Math.pow(2, this.reconnectAttempts);
       this.reconnectAttempts++;
       setTimeout(() => this.connectWebSocket(), Math.min(delay, 30000));
     } else {
-      this.shadowRoot.getElementById('conn-banner').textContent = 'Connection lost. Please refresh.';
+      this.querySelector('#conn-banner').textContent = '⚠️ Connection lost permanently. Please refresh page.';
     }
   }
 
@@ -401,7 +180,7 @@ class ChatApp extends HTMLElement {
     
     switch (type) {
       case 'auth_ack':
-        console.log('Authenticated');
+        console.log('Authenticated successfully');
         break;
         
       case 'new_message': {
@@ -416,33 +195,32 @@ class ChatApp extends HTMLElement {
           this.appendMessage(payload);
           this.scrollToBottom();
           
-          // Send read receipt if we are in this channel
+          // Send read receipt
           this.ws.send(JSON.stringify({
             type: 'message_read',
             payload: { id, channelId }
           }));
         } else {
-          // Update channel list to show unread (simple version: just re-render list to move to top)
           this.renderChannelList();
         }
         break;
       }
         
       case 'message_ack': {
-        // Update local message status to 'sent' or 'delivered'
-        const msgEl = this.shadowRoot.getElementById(\`msg-status-\${payload.id}\`);
+        const msgEl = this.querySelector(`#msg-status-${payload.id}`);
         if (msgEl) {
           msgEl.textContent = '✓✓'; // Delivered
+          msgEl.className = 'text-[10px] text-slate-400 font-bold ml-1';
         }
         break;
       }
       
       case 'message_update': {
-        const msgEl = this.shadowRoot.getElementById(\`msg-status-\${payload.id}\`);
+        const msgEl = this.querySelector(`#msg-status-${payload.id}`);
         if (msgEl) {
           if (payload.status === 'read') {
             msgEl.textContent = '✓✓';
-            msgEl.classList.add('status-read');
+            msgEl.className = 'text-[10px] text-emerald-400 font-bold ml-1'; // Blue tick style but emerald for branding
           }
         }
         break;
@@ -460,9 +238,7 @@ class ChatApp extends HTMLElement {
           const user = this.users.get(payload.userId);
           user.status = payload.status;
           user.last_seen = payload.lastSeen;
-          // Trigger re-render if needed
         } else {
-          // New user, fetch or add
           this.users.set(payload.userId, { id: payload.userId, status: payload.status, last_seen: payload.lastSeen });
         }
         break;
@@ -471,8 +247,8 @@ class ChatApp extends HTMLElement {
   }
 
   setupEventListeners() {
-    const input = this.shadowRoot.getElementById('message-input');
-    const sendBtn = this.shadowRoot.getElementById('send-btn');
+    const input = this.querySelector('#message-input');
+    const sendBtn = this.querySelector('#send-btn');
     
     sendBtn.addEventListener('click', () => this.sendMessage());
     
@@ -501,21 +277,21 @@ class ChatApp extends HTMLElement {
   }
 
   showTypingIndicator(userId) {
-    const indicator = this.shadowRoot.getElementById('typing-indicator');
+    const indicator = this.querySelector('#typing-indicator');
     const user = this.users.get(userId);
     const name = user ? (user.username || 'Someone') : 'Someone';
     
-    indicator.innerHTML = \`\${name} is typing <span class="typing-dots"><span></span><span></span><span></span></span>\`;
-    indicator.style.display = 'block';
+    indicator.innerHTML = `${name} is typing <span class="inline-flex gap-0.5 items-center ml-1"><span class="w-1 h-1 bg-slate-400 rounded-full animate-bounce"></span><span class="w-1 h-1 bg-slate-400 rounded-full animate-bounce [animation-delay:0.2s]"></span><span class="w-1 h-1 bg-slate-400 rounded-full animate-bounce [animation-delay:0.4s]"></span></span>`;
+    indicator.classList.remove('hidden');
     
     clearTimeout(this.indicatorTimeout);
     this.indicatorTimeout = setTimeout(() => {
-      indicator.style.display = 'none';
+      indicator.classList.add('hidden');
     }, 3000);
   }
 
   sendMessage() {
-    const input = this.shadowRoot.getElementById('message-input');
+    const input = this.querySelector('#message-input');
     const content = input.value.trim();
     
     if (content && this.ws && this.ws.readyState === WebSocket.OPEN) {
@@ -557,19 +333,23 @@ class ChatApp extends HTMLElement {
   }
 
   renderChannelList() {
-    const list = this.shadowRoot.getElementById('channel-list');
+    const list = this.querySelector('#channel-list');
     list.innerHTML = '';
     
-    // For demo, hardcoding one channel. In real app, iterate over user's channels.
     const channelEl = document.createElement('div');
-    channelEl.className = \`channel-item \${this.currentChannel === 'general' ? 'active' : ''}\`;
-    channelEl.innerHTML = \`
-      <div class="avatar">#</div>
-      <div class="channel-info">
-        <div class="channel-name">General</div>
-        <div class="channel-last-msg">Welcome to real-time chat</div>
+    const isActive = this.currentChannel === 'general';
+    channelEl.className = `flex items-center gap-3 p-4 cursor-pointer hover:bg-slate-800/40 transition duration-150 ${isActive ? 'bg-slate-800/60 border-l-4 border-brand-500' : ''}`;
+    
+    channelEl.innerHTML = `
+      <div class="w-11 h-11 rounded-xl bg-slate-800 border border-slate-700/60 flex items-center justify-center font-bold text-brand-500">#</div>
+      <div class="flex-1 min-w-0">
+        <div class="flex justify-between items-baseline mb-0.5">
+          <span class="font-medium text-slate-200 truncate">General</span>
+        </div>
+        <p class="text-xs text-slate-500 truncate">Welcome to real-time chat</p>
       </div>
-    \`;
+    `;
+    
     channelEl.onclick = () => this.selectChannel('general');
     list.appendChild(channelEl);
   }
@@ -577,22 +357,18 @@ class ChatApp extends HTMLElement {
   selectChannel(channelId) {
     this.currentChannel = channelId;
     
-    // Update UI
-    this.shadowRoot.getElementById('chat-header').style.visibility = 'visible';
-    this.shadowRoot.getElementById('chat-input-area').style.visibility = 'visible';
-    this.shadowRoot.getElementById('current-channel-name').textContent = 'General';
+    // Update headers and panel visibility
+    this.querySelector('#chat-header').style.visibility = 'visible';
+    this.querySelector('#chat-input-area').style.visibility = 'visible';
+    this.querySelector('#current-channel-name').textContent = 'General Workspace';
+    this.querySelector('#current-channel-status').textContent = 'Open team communication room';
     
-    // Highlight in list
-    const items = this.shadowRoot.querySelectorAll('.channel-item');
-    items.forEach(item => item.classList.remove('active'));
-    // Assuming first item is general for now
-    if(items.length > 0) items[0].classList.add('active');
-    
+    this.renderChannelList();
     this.renderMessages();
   }
 
   renderMessages() {
-    const container = this.shadowRoot.getElementById('chat-messages');
+    const container = this.querySelector('#chat-messages');
     container.innerHTML = '';
     
     const msgs = this.messages.get(this.currentChannel) || [];
@@ -609,46 +385,51 @@ class ChatApp extends HTMLElement {
     this.scrollToBottom();
   }
 
-  appendMessage(msgData, container = this.shadowRoot.getElementById('chat-messages')) {
+  appendMessage(msgData, container = this.querySelector('#chat-messages')) {
     const isMe = msgData.userId === this.userId;
     const user = this.users.get(msgData.userId);
     const username = isMe ? 'You' : (user ? user.username : 'Unknown');
     
     const time = new Date(msgData.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     
-    let statusHtml = '';
+    let statusTicks = '';
+    let tickColorClass = 'text-slate-500';
     if (isMe) {
-      let icon = '✓'; // sending
-      let sClass = '';
+      let icon = '✓'; 
       if (msgData.status === 'sent') icon = '✓';
       if (msgData.status === 'delivered') icon = '✓✓';
-      if (msgData.status === 'read') { icon = '✓✓'; sClass = 'status-read'; }
+      if (msgData.status === 'read') { icon = '✓✓'; tickColorClass = 'text-emerald-400'; }
       
-      statusHtml = \`<span class="message-status \${sClass}" id="msg-status-\${msgData.id}">\${icon}</span>\`;
+      statusTicks = `<span class="text-[10px] ${tickColorClass} font-bold ml-1" id="msg-status-${msgData.id}">${icon}</span>`;
     }
 
-    const msgEl = document.createElement('div');
-    msgEl.className = \`message-container \${isMe ? 'sent' : 'received'}\`;
+    const wrapperEl = document.createElement('div');
+    wrapperEl.className = `flex w-full mb-1 animate-[fadeIn_0.2s_ease-out] ${isMe ? 'justify-end' : 'justify-start'}`;
     
-    // Only show sender name in group chats if not me (simplified)
-    const nameHtml = !isMe ? \`<div style="font-size: 0.8rem; color: var(--accent-color); margin-bottom: 4px;">\${username}</div>\` : '';
+    const bubbleEl = document.createElement('div');
+    bubbleEl.className = `max-w-[70%] px-4 py-2.5 rounded-2xl shadow-sm ${
+      isMe 
+        ? 'bg-emerald-600/90 text-white rounded-tr-none' 
+        : 'bg-slate-800/80 text-slate-100 rounded-tl-none border border-slate-700/30'
+    }`;
     
-    msgEl.innerHTML = \`
-      <div class="message-bubble">
-        \${nameHtml}
-        <div>\${this.escapeHTML(msgData.content)}</div>
-        <div class="message-meta">
-          <span>\${time}</span>
-          \${statusHtml}
-        </div>
+    const senderHtml = !isMe ? `<div class="text-xs font-semibold text-brand-500 mb-1">${username}</div>` : '';
+    
+    bubbleEl.innerHTML = `
+      ${senderHtml}
+      <div class="text-sm break-words leading-relaxed">${this.escapeHTML(msgData.content)}</div>
+      <div class="flex items-center justify-end gap-1 mt-1 text-[9px] text-slate-300 select-none">
+        <span>${time}</span>
+        ${statusTicks}
       </div>
-    \`;
+    `;
     
-    container.appendChild(msgEl);
+    wrapperEl.appendChild(bubbleEl);
+    container.appendChild(wrapperEl);
   }
 
   scrollToBottom() {
-    const container = this.shadowRoot.getElementById('chat-messages');
+    const container = this.querySelector('#chat-messages');
     container.scrollTop = container.scrollHeight;
   }
 
