@@ -112,6 +112,10 @@ app.get('/api/channels', ChatController.getChannels);
 app.get('/api/messages/:channelId', ChatController.getMessages);
 app.get('/api/users', ChatController.getUsers);
 
+app.get('/api-docs', (req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'public', 'api-docs.html'));
+});
+
 /**
  * Global API Error Handling Middleware
  */

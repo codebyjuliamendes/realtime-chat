@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: realtime-chat
+  namespace: default
+  labels:
+    app: realtime-chat
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: realtime-chat
+  template:
+    metadata:
+      labels:
+        app: realtime-chat
+    spec:
+      containers:
+        - name: realtime-chat
+          image: realtime-chat:latest
+          ports:
+            - containerPort: 3003
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "250m"
+              memory: "256Mi"
+          livenessProbe:
+            httpGet:
+              path: /api/channels
+              port: 3003
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /api/channels
+              port: 3003
+            initialDelaySeconds: 5
+            periodSeconds: 10

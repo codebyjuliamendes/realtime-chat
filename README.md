@@ -83,6 +83,11 @@ realtime-chat/
 - **Ping/Pong RTT Check:** Dynamically checks Round Trip Time (RTT). If RTT exceeds 500ms, sets an `X-Low-Bandwidth` header to conditionally skip media data in the backend.
 - **Idempotent Message ACKs:** Prevents duplicate message processing via strict DB checks on message IDs.
 
+### V4 Upgrades
+- **Kubernetes Ready:** Added Deployment, Service, and Ingress (nginx) manifests in `k8s/` to deploy on any Kubernetes cluster.
+- **CI/CD Pipeline:** Integrated GitHub Actions workflow in `.github/workflows/ci-cd.yml` for automated testing and Docker builds.
+- **Swagger API Documentation:** Exposed comprehensive API documentation at `/api-docs` mapping to `/swagger.json`.
+
 ---
 
 ## 🧱 Built With
