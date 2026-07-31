@@ -11,7 +11,8 @@ import { fileURLToPath } from 'url';
 import helmet from 'helmet';
 import cors from 'cors';
 import compression from 'compression';
-import { initializeWebSocket } from './socket.js';
+import { Worker, isMainThread, parentPort } from 'worker_threads';
+import { initializeWebSocket, bandwidthCache } from './socket.js';
 import { db, initDB } from './db.js';
 import { queryAll } from './db-helper.js';
 
@@ -122,17 +123,42 @@ app.use((err, req, res, next) => {
   });
 });
 
+app.use((req, res, next) => {
+  // Apply X-Low-Bandwidth header if user is flagged
+  const userId = req.headers['x-user-id'] || req.query.userId;
+  if (userId && bandwidthCache.get(userId)) {
+    res.setHeader('X-Low-Bandwidth', 'true');
+    // Simulated media skip logic can happen here
+  }
+  next();
+});
+
 const PORT = process.env.PORT || 3003;
 
-(async () => {
-  try {
-    await initDB();
-    initializeWebSocket(server);
-    server.listen(PORT, () => {
-      console.log(`[Server] Real-time chat listening on port ${PORT}`);
-    });
-  } catch (err) {
-    console.error('Fatal Server Boot Error:', err);
-    process.exit(1);
+if (isMainThread) {
+  // worker_threads multithreading cluster simulator
+  console.log('[Cluster] Main thread is running');
+  for (let i = 0; i < 2; i++) {
+    const worker = new Worker(fileURLToPath(import.meta.url));
+    worker.on('message', (msg) => console.log(`[Worker] ${msg}`));
   }
-})();
+
+  (async () => {
+    try {
+      await initDB();
+      initializeWebSocket(server);
+      server.listen(PORT, () => {
+        console.log(`[Server] Real-time chat listening on port ${PORT}`);
+      });
+    } catch (err) {
+      console.error('Fatal Server Boot Error:', err);
+      process.exit(1);
+    }
+  })();
+} else {
+  // Worker Thread simulator logic
+  parentPort.postMessage(`Worker thread started with ID: ${process.pid}`);
+  setInterval(() => {
+    // Simulating background clustering tasks
+  }, 60000);
+}

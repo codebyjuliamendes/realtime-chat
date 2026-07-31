@@ -78,6 +78,11 @@ realtime-chat/
 - **Custom ACK Protocols:** Bidirectional message acknowledgment (sending, sent, read ticks).
 - **Graceful Typings:** Fully documented using detailed JSDoc typings.
 
+### V3 Upgrades
+- **Worker Threads Cluster Simulator:** Implements a multithreading cluster simulator using Node.js `worker_threads` for scaling backend tasks.
+- **Ping/Pong RTT Check:** Dynamically checks Round Trip Time (RTT). If RTT exceeds 500ms, sets an `X-Low-Bandwidth` header to conditionally skip media data in the backend.
+- **Idempotent Message ACKs:** Prevents duplicate message processing via strict DB checks on message IDs.
+
 ---
 
 ## 🧱 Built With

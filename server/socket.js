@@ -6,7 +6,9 @@
 import { WebSocketServer } from 'ws';
 import { LRUCache } from './cache.js';
 import { db, saveDB } from './db.js';
-import { runSql } from './db-helper.js';
+import { runSql, queryOne } from './db-helper.js';
+
+export const bandwidthCache = new Map();
 
 /**
  * Bootstraps the WebSocket Server on the HTTP Server instance.
@@ -34,10 +36,21 @@ export function initializeWebSocket(server) {
 
   wss.on('connection', (ws) => {
     ws.isAlive = true;
+    ws.pingTime = 0;
     let currentUser = null;
 
     ws.on('pong', () => {
       ws.isAlive = true;
+      if (ws.pingTime > 0) {
+        const rtt = Date.now() - ws.pingTime;
+        if (currentUser) {
+          if (rtt > 500) {
+            bandwidthCache.set(currentUser, true);
+          } else {
+            bandwidthCache.delete(currentUser);
+          }
+        }
+      }
     });
 
     ws.on('message', (data) => {
@@ -82,6 +95,17 @@ export function initializeWebSocket(server) {
             const { id, channelId, content } = payload;
             if (!id || !channelId || typeof content !== 'string') {
               throw new Error('Message sending failed: Invalid payload structure');
+            }
+
+            // Idempotent message ACK check
+            const existingMessage = queryOne(db, 'SELECT id FROM messages WHERE id = ?', [id]);
+            if (existingMessage) {
+              // Message already processed, just send ACK back
+              ws.send(JSON.stringify({
+                type: 'message_ack',
+                payload: { id, status: 'sent', idempotent: true }
+              }));
+              break;
             }
             
             const timestamp = Date.now();
@@ -163,6 +187,7 @@ export function initializeWebSocket(server) {
         return ws.terminate();
       }
       ws.isAlive = false;
+      ws.pingTime = Date.now();
       ws.ping();
     });
   }, 30000);
