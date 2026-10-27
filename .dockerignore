@@ -1,0 +1,17 @@
+node_modules
+npm-debug.log*
+.git
+.github
+data
+*.db
+public/assets
+coverage
+test
+e2e
+k8s
+.env
+.env.*
+*.md
+.DS_Store
+.vscode
+.idea
