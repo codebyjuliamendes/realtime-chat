@@ -1,155 +1,248 @@
 {
-  "openapi": "3.0.0",
+  "openapi": "3.0.3",
   "info": {
-    "title": "Real-Time Chat API",
-    "version": "1.0.0",
-    "description": "API Documentation for Real-Time Chat System at Scale"
+    "title": "NexusChat REST API",
+    "version": "2.0.0",
+    "description": "REST endpoints of the real-time chat. Real-time traffic (messages, typing, presence, read receipts) uses the WebSocket protocol at /ws, documented in the README. All endpoints except POST /api/session require a bearer token obtained from POST /api/session."
   },
-  "servers": [
-    {
-      "url": "http://localhost:3003",
-      "description": "Local server"
-    }
-  ],
-  "paths": {
-    "/api/channels": {
-      "get": {
-        "summary": "Get all channels",
-        "description": "Returns a list of all chat channels",
-        "responses": {
-          "200": {
-            "description": "A list of channels",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/Channel"
-                  }
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal Server Error"
-          }
-        }
-      }
-    },
-    "/api/messages/{channelId}": {
-      "get": {
-        "summary": "Get messages for a channel",
-        "description": "Returns a list of messages for a specific channel",
-        "parameters": [
-          {
-            "name": "channelId",
-            "in": "path",
-            "required": true,
-            "description": "The ID of the channel",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "A list of messages",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/Message"
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          }
-        }
-      }
-    },
-    "/api/users": {
-      "get": {
-        "summary": "Get all users",
-        "description": "Returns a list of all registered users",
-        "responses": {
-          "200": {
-            "description": "A list of users",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/User"
-                  }
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal Server Error"
-          }
-        }
-      }
-    }
-  },
+  "servers": [{ "url": "/", "description": "This server" }],
   "components": {
+    "securitySchemes": {
+      "bearerAuth": { "type": "http", "scheme": "bearer", "description": "Session token returned by POST /api/session" }
+    },
     "schemas": {
-      "Channel": {
+      "Error": {
         "type": "object",
         "properties": {
-          "id": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          },
-          "type": {
-            "type": "string"
-          }
-        }
-      },
-      "Message": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "channel_id": {
-            "type": "string"
-          },
-          "user_id": {
-            "type": "string"
-          },
-          "content": {
-            "type": "string"
-          },
-          "status": {
-            "type": "string"
-          },
-          "timestamp": {
-            "type": "integer"
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": { "type": "string", "example": "bad_request" },
+              "message": { "type": "string" }
+            }
           }
         }
       },
       "User": {
         "type": "object",
         "properties": {
-          "id": {
-            "type": "string"
-          },
-          "username": {
-            "type": "string"
-          },
-          "status": {
-            "type": "string"
+          "id": { "type": "string", "format": "uuid" },
+          "username": { "type": "string", "maxLength": 32 },
+          "status": { "type": "string", "enum": ["online", "offline"] },
+          "last_seen": { "type": "integer", "description": "Unix epoch (ms)", "nullable": true }
+        }
+      },
+      "Channel": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,39}$", "example": "general" },
+          "name": { "type": "string", "maxLength": 40, "example": "General" },
+          "type": { "type": "string", "example": "group" },
+          "created_by": { "type": "string", "nullable": true },
+          "created_at": { "type": "integer", "nullable": true }
+        }
+      },
+      "Message": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "channel_id": { "type": "string" },
+          "user_id": { "type": "string" },
+          "content": { "type": "string", "maxLength": 2000 },
+          "status": { "type": "string", "enum": ["sent", "read"] },
+          "timestamp": { "type": "integer", "description": "Unix epoch (ms), server-assigned and strictly increasing" }
+        }
+      }
+    },
+    "responses": {
+      "Unauthorized": {
+        "description": "Missing, invalid or expired token",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+      },
+      "BadRequest": {
+        "description": "Invalid input",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+      },
+      "TooManyRequests": {
+        "description": "Rate limit exceeded",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+      }
+    }
+  },
+  "security": [{ "bearerAuth": [] }],
+  "paths": {
+    "/api/session": {
+      "post": {
+        "summary": "Create a session (join with a display name)",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["username"],
+                "properties": { "username": { "type": "string", "minLength": 1, "maxLength": 32 } }
+              }
+            }
           }
+        },
+        "responses": {
+          "201": {
+            "description": "Session created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "token": { "type": "string" },
+                    "user": {
+                      "type": "object",
+                      "properties": { "id": { "type": "string" }, "username": { "type": "string" } }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "429": { "$ref": "#/components/responses/TooManyRequests" }
+        }
+      }
+    },
+    "/api/me": {
+      "get": {
+        "summary": "Current user",
+        "responses": {
+          "200": {
+            "description": "The authenticated user",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/User" } } }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/api/channels": {
+      "get": {
+        "summary": "List channels",
+        "responses": {
+          "200": {
+            "description": "All channels",
+            "content": {
+              "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Channel" } } }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      },
+      "post": {
+        "summary": "Create a public channel",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name"],
+                "properties": { "name": { "type": "string", "maxLength": 40 } }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Channel created",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Channel" } } }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "409": { "description": "A channel with the same id already exists" },
+          "429": { "$ref": "#/components/responses/TooManyRequests" }
+        }
+      }
+    },
+    "/api/channels/{channelId}/messages": {
+      "get": {
+        "summary": "Message history of a channel (chronological)",
+        "description": "Without cursors returns the newest messages. Use `before` to page backwards and `after` to catch up after a reconnect.",
+        "parameters": [
+          { "name": "channelId", "in": "path", "required": true, "schema": { "type": "string" } },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": { "type": "integer", "minimum": 1, "maximum": 200, "default": 50 }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "schema": { "type": "integer" },
+            "description": "Only messages with timestamp < before"
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "schema": { "type": "integer" },
+            "description": "Only messages with timestamp > after"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Messages",
+            "content": {
+              "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Message" } } }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "description": "Channel not found" }
+        }
+      }
+    },
+    "/api/messages/{channelId}": {
+      "get": {
+        "summary": "Message history (legacy alias)",
+        "deprecated": true,
+        "description": "Same as /api/channels/{channelId}/messages.",
+        "parameters": [{ "name": "channelId", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": {
+          "200": {
+            "description": "Messages",
+            "content": {
+              "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Message" } } }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/api/users": {
+      "get": {
+        "summary": "List users and their presence",
+        "responses": {
+          "200": {
+            "description": "Users",
+            "content": {
+              "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/User" } } }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/healthz": {
+      "get": {
+        "summary": "Liveness probe",
+        "security": [],
+        "responses": { "200": { "description": "Process is alive" } }
+      }
+    },
+    "/readyz": {
+      "get": {
+        "summary": "Readiness probe",
+        "security": [],
+        "responses": {
+          "200": { "description": "Ready to serve" },
+          "503": { "description": "Starting or shutting down" }
         }
       }
     }

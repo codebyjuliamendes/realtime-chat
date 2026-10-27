@@ -1,491 +1,736 @@
+import { ApiError, apiRequest } from '../js/api.js';
+import { ChatSocket } from '../js/chat-socket.js';
+import { el, hydrateIcons, showToast, uuid } from '../js/dom.js';
+
+const HISTORY_PAGE = 50;
+const CATCH_UP_PAGE = 200;
+const MESSAGE_MAX_LENGTH = 2000;
+const TYPING_THROTTLE_MS = 2000;
+const TYPING_DISPLAY_MS = 3000;
+
 const template = document.createElement('template');
 template.innerHTML = `
-  <div class="flex w-full h-full bg-slate-950 text-slate-100 overflow-hidden font-sans">
-    <!-- Sidebar -->
-    <div class="w-1/3 min-w-[280px] max-w-[400px] border-r border-slate-800/80 flex flex-col bg-slate-900">
-      
-      <!-- User profile header -->
-      <div class="p-4 bg-slate-900 border-b border-slate-800 flex items-center justify-between">
-        <div class="flex items-center gap-3">
-          <div class="relative w-10 h-10 rounded-full bg-brand-600 flex items-center justify-center font-bold text-white shadow-md shadow-brand-600/20" id="my-avatar">
+  <div class="relative flex w-full h-full bg-slate-950 text-slate-100 overflow-hidden">
+    <aside id="sidebar" aria-label="Workspace"
+      class="fixed inset-y-0 left-0 z-40 w-[85%] max-w-xs -translate-x-full invisible md:visible transition-[transform,visibility] duration-200 md:static md:translate-x-0 md:w-80 md:max-w-none flex flex-col bg-slate-900 border-r border-slate-800">
+      <div class="p-4 border-b border-slate-800 flex items-center justify-between gap-3">
+        <div class="flex items-center gap-3 min-w-0">
+          <div class="relative w-10 h-10 shrink-0 rounded-full bg-brand-600 flex items-center justify-center font-bold text-white" aria-hidden="true">
             <span id="my-initial">-</span>
-            <div class="absolute bottom-0 right-0 w-3 h-3 bg-brand-500 rounded-full border-2 border-slate-900"></div>
+            <span class="absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-slate-900 bg-slate-500" id="my-presence"></span>
           </div>
-          <span class="font-semibold text-slate-200" id="my-name">-</span>
+          <div class="min-w-0">
+            <p class="font-semibold text-slate-200 truncate" id="my-name">-</p>
+            <p class="text-xs text-slate-400" id="conn-status" role="status">Connecting…</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-1">
+          <button type="button" id="logout-btn" class="p-2 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-slate-800" aria-label="Sign out" title="Sign out">
+            <span data-icon="logout"></span>
+          </button>
+          <button type="button" id="close-sidebar-btn" class="p-2 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-slate-800 md:hidden" aria-label="Close channel list">
+            <span data-icon="close"></span>
+          </button>
         </div>
       </div>
-      
-      <!-- Search bar -->
-      <div class="p-3 bg-slate-900/50">
+
+      <div class="p-3">
+        <label for="channel-search" class="sr-only">Search channels</label>
         <div class="relative">
-          <input type="text" placeholder="Search or start new chat" 
-            class="w-full px-4 py-2 pl-9 bg-slate-950 border border-slate-800/80 focus:border-brand-500/50 outline-none rounded-xl text-slate-200 text-sm transition placeholder-slate-500">
-          <span class="absolute left-3 top-2.5 text-slate-500"><i data-lucide="search" class="w-4 h-4"></i></span>
+          <input type="search" id="channel-search" placeholder="Search channels" autocomplete="off"
+            class="w-full px-4 py-2 pl-9 bg-slate-950 border border-slate-800 focus:border-brand-500/60 rounded-xl text-slate-200 text-sm placeholder-slate-500">
+          <span class="absolute left-3 top-2.5 text-slate-500"><span data-icon="search"></span></span>
         </div>
       </div>
-      
-      <!-- Channel List -->
-      <div class="flex-1 overflow-y-auto divide-y divide-slate-800/30" id="channel-list">
-        <!-- Channels render here dynamically -->
-      </div>
-    </div>
-    
-    <!-- Main Chat Area -->
-    <div class="flex-1 flex flex-col bg-slate-950 relative">
-      
-      <!-- Reconnection Banner -->
-      <div class="absolute top-0 left-0 right-0 py-2 px-4 bg-amber-500 text-slate-950 text-center text-sm font-semibold hidden z-50 transition-all duration-300" id="conn-banner">
-        <i data-lucide="alert-triangle" class="inline w-4 h-4 mr-1"></i> Connection lost. Reconnecting...
-      </div>
-      
-      <!-- Chat Header -->
-      <div class="p-4 bg-slate-900 border-b border-slate-800 flex items-center gap-3 z-10" id="chat-header" style="visibility: hidden;">
-        <div class="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center font-bold text-brand-500 border border-slate-700" id="current-channel-avatar">#</div>
-        <div class="flex flex-col overflow-hidden">
-          <span class="font-semibold text-slate-100" id="current-channel-name">Channel Name</span>
-          <span class="text-xs text-slate-400" id="current-channel-status">Click to view details</span>
-        </div>
-      </div>
-      
-      <!-- Chat Messages Scroll Container -->
-      <div class="flex-1 p-6 overflow-y-auto flex flex-col gap-4 bg-slate-950/40 relative" id="chat-messages">
-        <!-- Messages go here -->
-      </div>
-      
-      <!-- Typing Indicator -->
-      <div class="px-6 py-2 text-xs text-slate-400 italic hidden flex items-center gap-2" id="typing-indicator">
-        Someone is typing
-        <span class="inline-flex gap-1 items-center">
-          <span class="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce"></span>
-          <span class="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce [animation-delay:0.2s]"></span>
-          <span class="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce [animation-delay:0.4s]"></span>
-        </span>
-      </div>
-      
-      <!-- Chat Input Area -->
-      <div class="p-4 bg-slate-900 border-t border-slate-800 flex items-center gap-3" id="chat-input-area" style="visibility: hidden;">
-        <input type="text" class="flex-1 px-4 py-3 bg-slate-950 border border-slate-800 focus:border-brand-500/50 outline-none rounded-xl text-slate-200 text-sm transition placeholder-slate-500" 
-          id="message-input" placeholder="Type a message" autocomplete="off">
-        <button class="bg-brand-600 hover:bg-brand-500 active:bg-brand-700 text-white font-medium w-11 h-11 rounded-xl flex items-center justify-center transition shadow-lg shadow-brand-600/20" 
-          id="send-btn">
-          <i data-lucide="send" class="w-4 h-4"></i>
+
+      <nav class="flex-1 overflow-y-auto" aria-label="Channels">
+        <ul id="channel-list" class="divide-y divide-slate-800/40"></ul>
+        <p id="channel-empty" class="p-4 text-sm text-slate-500" hidden>No channels match your search.</p>
+      </nav>
+
+      <form id="new-channel-form" class="p-3 border-t border-slate-800 flex gap-2" novalidate>
+        <label for="new-channel-input" class="sr-only">New channel name</label>
+        <input id="new-channel-input" type="text" maxlength="40" placeholder="New channel" autocomplete="off"
+          class="flex-1 min-w-0 px-3 py-2 bg-slate-950 border border-slate-800 focus:border-brand-500/60 rounded-xl text-sm text-slate-200 placeholder-slate-500">
+        <button type="submit" class="px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-100 disabled:opacity-50" aria-label="Create channel">
+          <span data-icon="plus"></span>
         </button>
+      </form>
+    </aside>
+    <div id="sidebar-backdrop" class="fixed inset-0 z-30 bg-black/60 md:hidden" hidden></div>
+
+    <main class="flex-1 flex flex-col min-w-0 bg-slate-950">
+      <header class="p-3 sm:p-4 bg-slate-900 border-b border-slate-800 flex items-center gap-3">
+        <button type="button" id="open-sidebar-btn" class="p-2 -ml-1 rounded-lg text-slate-300 hover:bg-slate-800 md:hidden"
+          aria-label="Open channel list" aria-controls="sidebar" aria-expanded="false">
+          <span data-icon="menu" data-class="w-5 h-5"></span>
+        </button>
+        <div class="w-10 h-10 shrink-0 rounded-full bg-slate-800 flex items-center justify-center font-bold text-brand-500 border border-slate-700" aria-hidden="true">#</div>
+        <div class="flex flex-col min-w-0">
+          <h1 class="font-semibold text-slate-100 truncate" id="current-channel-name">…</h1>
+          <p class="text-xs text-slate-400 truncate" id="current-channel-status"></p>
+        </div>
+      </header>
+
+      <div id="conn-banner" role="status" hidden
+        class="py-2 px-4 bg-amber-500 text-slate-950 text-center text-sm font-semibold flex items-center justify-center gap-2">
+        <span data-icon="alert"></span><span id="conn-banner-text">Connection lost. Reconnecting…</span>
       </div>
-      
-    </div>
+
+      <div id="chat-messages" class="flex-1 px-3 py-4 sm:p-6 overflow-y-auto">
+        <div class="flex justify-center mb-4">
+          <button type="button" id="load-older-btn" hidden
+            class="px-3 py-1.5 text-xs rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 disabled:opacity-60">Load older messages</button>
+        </div>
+        <div id="messages-state" class="text-center text-sm text-slate-400 py-10" hidden></div>
+        <ol id="message-list" class="flex flex-col gap-2" role="log" aria-live="polite" aria-label="Messages"></ol>
+      </div>
+
+      <p id="typing-indicator" class="px-6 h-6 text-xs text-slate-400 italic truncate" aria-live="polite"></p>
+
+      <form id="composer" class="p-3 sm:p-4 bg-slate-900 border-t border-slate-800 flex items-center gap-2 sm:gap-3" novalidate>
+        <label for="message-input" class="sr-only">Message</label>
+        <input type="text" id="message-input" maxlength="${MESSAGE_MAX_LENGTH}" placeholder="Type a message" autocomplete="off"
+          aria-describedby="char-count"
+          class="flex-1 min-w-0 px-4 py-3 bg-slate-950 border border-slate-800 focus:border-brand-500/60 rounded-xl text-slate-200 text-sm placeholder-slate-500">
+        <span id="char-count" class="text-xs text-slate-500 tabular-nums" hidden></span>
+        <button type="submit" id="send-btn" aria-label="Send message"
+          class="shrink-0 bg-brand-600 hover:bg-brand-500 active:bg-brand-700 disabled:opacity-50 text-white w-11 h-11 rounded-xl flex items-center justify-center transition">
+          <span data-icon="send"></span>
+        </button>
+      </form>
+    </main>
   </div>
 `;
+
+const STATUS_LABEL = { sending: 'Sending', sent: 'Sent', read: 'Read', failed: 'Not sent' };
+const STATUS_ICON = { sending: '…', sent: '✓', read: '✓✓', failed: '!' };
+
+/**
+ * @typedef {{ id: string, channel_id: string, user_id: string, username?: string, content: string, status: string, timestamp: number }} ChatMessage
+ */
 
 class ChatApp extends HTMLElement {
   constructor() {
     super();
-    // We render inside Light DOM so Tailwind v3 styles apply globally!
-    this.userId = null;
-    this.username = null;
-    this.ws = null;
-    this.reconnectAttempts = 0;
-    this.maxReconnectAttempts = 5;
-    this.baseReconnectDelay = 1000;
-    
-    this.currentChannel = 'general'; // Default channel
+    /** @type {{ token: string, user: { id: string, username: string } } | null} */
+    this.session = null;
+    /** @type {ChatSocket|null} */
+    this.socket = null;
+    this.currentChannel = 'general';
+    /** @type {Map<string, {id: string, name: string}>} */
+    this.channels = new Map();
+    /** @type {Map<string, {id: string, username?: string, status?: string}>} */
     this.users = new Map();
-    this.messages = new Map(); // channelId -> array of messages
-    this.typingTimeout = null;
-    this.isTyping = false;
+    /** @type {Map<string, ChatMessage[]>} */
+    this.messages = new Map();
+    /** @type {Map<string, boolean>} channelId -> has older history */
+    this.hasOlder = new Map();
+    /** @type {Map<string, number>} */
+    this.unread = new Map();
+    /** @type {Set<string>} */
+    this.receiptsSent = new Set();
+    /** @type {Map<string, ReturnType<typeof setTimeout>>} userId -> hide timer */
+    this.typingUsers = new Map();
+    this.lastTypingSentAt = 0;
+    this.everConnected = false;
+    /** @type {(() => void) | null} */
+    this.visibilityListener = null;
   }
 
-  initialize(userId, username) {
-    this.userId = userId;
-    this.username = username;
-    
-    // Set template content into the innerHTML
-    this.innerHTML = template.innerHTML;
-    if (window.lucide) window.lucide.createIcons();
-    
-    this.querySelector('#my-initial').textContent = username.charAt(0).toUpperCase();
-    this.querySelector('#my-name').textContent = username;
-    
+  /** @param {{ token: string, user: { id: string, username: string } }} session */
+  async start(session) {
+    this.session = session;
+    this.replaceChildren(template.content.cloneNode(true));
+    hydrateIcons(this);
+    this.$('#my-initial').textContent = [...session.user.username][0]?.toUpperCase() ?? '?';
+    this.$('#my-name').textContent = session.user.username;
     this.setupEventListeners();
-    this.fetchInitialData().then(() => {
-      this.connectWebSocket();
-      this.renderChannelList();
-      this.selectChannel('general');
-    });
-  }
 
-  async fetchInitialData() {
-    this.showSkeletons();
-    
-    // Simulate network delay to show off skeletons
-    await new Promise(r => setTimeout(r, 1200));
-
+    this.setMessagesState('Loading…');
     try {
-      // Fetch users
-      const usersRes = await fetch('/api/users');
-      const users = await usersRes.json();
-      users.forEach(u => this.users.set(u.id, u));
-      
-      // Fetch initial messages for default channel
-      const msgRes = await fetch('/api/messages/general');
-      const msgs = await msgRes.json();
-      this.messages.set('general', msgs);
-    } catch (e) {
-      console.error('Failed to fetch initial data', e);
-      if (window.showToast) window.showToast('Failed to load initial data', 'error');
+      const [channels, users] = await Promise.all([this.api('/api/channels'), this.api('/api/users')]);
+      for (const c of channels) this.channels.set(c.id, c);
+      for (const u of users) this.users.set(u.id, u);
+    } catch (error) {
+      if (this.handleAuthError(error)) return;
+      this.setMessagesState("Couldn't load the workspace.", () => this.restart());
+      return;
     }
+    this.renderChannelList();
+    await this.selectChannel(this.channels.has('general') ? 'general' : [...this.channels.keys()][0]);
+    this.connect();
   }
 
-  showSkeletons() {
-    const list = this.querySelector('#channel-list');
-    list.innerHTML = `
-      <div class="p-4 flex items-center gap-3 animate-pulse">
-        <div class="w-11 h-11 rounded-xl bg-slate-800"></div>
-        <div class="flex-1">
-          <div class="h-4 bg-slate-800 rounded w-1/2 mb-2"></div>
-          <div class="h-3 bg-slate-800 rounded w-3/4"></div>
-        </div>
-      </div>
-      <div class="p-4 flex items-center gap-3 animate-pulse">
-        <div class="w-11 h-11 rounded-xl bg-slate-800"></div>
-        <div class="flex-1">
-          <div class="h-4 bg-slate-800 rounded w-1/3 mb-2"></div>
-          <div class="h-3 bg-slate-800 rounded w-2/3"></div>
-        </div>
-      </div>
-    `;
-    
-    const messages = this.querySelector('#chat-messages');
-    messages.innerHTML = `
-      <div class="flex justify-start mb-4 animate-pulse">
-        <div class="w-2/3 h-16 bg-slate-800/80 rounded-2xl rounded-tl-none"></div>
-      </div>
-      <div class="flex justify-end mb-4 animate-pulse">
-        <div class="w-1/2 h-12 bg-emerald-800/40 rounded-2xl rounded-tr-none"></div>
-      </div>
-      <div class="flex justify-start mb-4 animate-pulse">
-        <div class="w-3/4 h-20 bg-slate-800/80 rounded-2xl rounded-tl-none"></div>
-      </div>
-    `;
-    this.querySelector('#chat-header').style.visibility = 'visible';
-    this.querySelector('#chat-input-area').style.visibility = 'visible';
+  restart() {
+    if (this.session) this.start(this.session);
   }
 
-  connectWebSocket() {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}`;
-    
-    this.ws = new WebSocket(wsUrl);
-    
-    this.ws.onopen = () => {
-      this.reconnectAttempts = 0;
-      this.querySelector('#conn-banner').classList.add('hidden');
-      
-      // Authenticate
-      this.ws.send(JSON.stringify({
-        type: 'auth',
-        payload: { userId: this.userId, username: this.username }
-      }));
-    };
-    
-    this.ws.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        this.handleWebSocketMessage(data);
-      } catch (err) {
-        console.error('Error handling ws message:', err);
-      }
-    };
-    
-    this.ws.onclose = () => {
-      this.handleDisconnect();
-    };
-    
-    this.ws.onerror = (err) => {
-      console.error('WebSocket error:', err);
-    };
+  /** @param {string} selector @returns {any} */
+  $(selector) {
+    return this.querySelector(selector);
   }
 
-  handleDisconnect() {
-    this.querySelector('#conn-banner').classList.remove('hidden');
-    
-    if (this.reconnectAttempts < this.maxReconnectAttempts) {
-      const delay = this.baseReconnectDelay * Math.pow(2, this.reconnectAttempts);
-      this.reconnectAttempts++;
-      setTimeout(() => this.connectWebSocket(), Math.min(delay, 30000));
-    } else {
-      this.querySelector('#conn-banner').textContent = '⚠️ Connection lost permanently. Please refresh page.';
+  /** @param {string} path @param {Parameters<typeof apiRequest>[1]} [opts] */
+  api(path, opts = {}) {
+    return apiRequest(path, { ...opts, token: this.session?.token });
+  }
+
+  /** @param {unknown} error @returns {boolean} true when the session is gone */
+  handleAuthError(error) {
+    if (error instanceof ApiError && error.status === 401) {
+      this.endSession('Your session has expired. Please join again.');
+      return true;
     }
+    return false;
   }
 
-  handleWebSocketMessage(data) {
-    const { type, payload } = data;
-    
-    switch (type) {
-      case 'auth_ack':
-        console.log('Authenticated successfully');
-        break;
-        
-      case 'new_message': {
-        const { channelId, id, userId, content, timestamp, status } = payload;
-        
-        if (!this.messages.has(channelId)) {
-          this.messages.set(channelId, []);
+  /** @param {string} [reason] */
+  endSession(reason = '') {
+    this.socket?.stop();
+    this.socket = null;
+    this.replaceChildren();
+    this.channels.clear();
+    this.messages.clear();
+    this.users.clear();
+    this.unread.clear();
+    this.hasOlder.clear();
+    this.receiptsSent.clear();
+    this.everConnected = false;
+    this.dispatchEvent(new CustomEvent('session-ended', { detail: { reason } }));
+  }
+
+  // ---- WebSocket ---------------------------------------------------------
+
+  connect() {
+    const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    this.socket = new ChatSocket({
+      url: `${protocol}//${location.host}/ws`,
+      getToken: () => this.session?.token ?? null,
+    });
+    this.socket
+      .on('status', (/** @type {string} */ s) => this.renderConnection(s))
+      .on('ready', (/** @type {any} */ ack) => this.onReady(ack))
+      .on('event', (/** @type {any} */ frame) => this.handleEvent(frame))
+      .on('fatal', () => this.endSession('Your session has expired. Please join again.'));
+    this.socket.connect();
+  }
+
+  /** @param {{ token: string, user: {id: string, username: string} }} ack */
+  async onReady(ack) {
+    if (!this.session) return;
+    this.session = { token: ack.token, user: ack.user };
+    this.dispatchEvent(new CustomEvent('token-refreshed', { detail: this.session }));
+    for (const channelId of this.channels.keys()) this.socket?.send('join', { channelId });
+    if (this.everConnected) await this.catchUp();
+    this.everConnected = true;
+    this.sendReadReceipts();
+  }
+
+  /** Fetches messages missed while disconnected for every loaded channel. */
+  async catchUp() {
+    for (const [channelId, list] of this.messages) {
+      let after = list.reduce(
+        (max, m) => (m.status !== 'sending' && m.status !== 'failed' ? Math.max(max, m.timestamp) : max),
+        0,
+      );
+      for (let page = 0; page < 5; page++) {
+        let batch;
+        try {
+          batch = await this.api(
+            `/api/channels/${encodeURIComponent(channelId)}/messages?after=${after}&limit=${CATCH_UP_PAGE}`,
+          );
+        } catch (error) {
+          this.handleAuthError(error);
+          return;
         }
-        this.messages.get(channelId).push({ id, channel_id: channelId, user_id: userId, content, timestamp, status });
-        
-        if (this.currentChannel === channelId) {
-          this.appendMessage(payload);
-          this.scrollToBottom();
-          
-          // Send read receipt
-          this.ws.send(JSON.stringify({
-            type: 'message_read',
-            payload: { id, channelId }
-          }));
-        } else {
+        for (const m of batch) this.addMessage(m, { countUnread: true });
+        if (batch.length < CATCH_UP_PAGE) break;
+        after = batch[batch.length - 1].timestamp;
+      }
+    }
+  }
+
+  /** @param {{ type: string, payload: any }} frame */
+  handleEvent({ type, payload }) {
+    switch (type) {
+      case 'new_message':
+        this.users.set(payload.userId, {
+          ...this.users.get(payload.userId),
+          id: payload.userId,
+          username: payload.username,
+        });
+        this.clearTyping(payload.userId);
+        this.addMessage(
+          {
+            id: payload.id,
+            channel_id: payload.channelId,
+            user_id: payload.userId,
+            content: payload.content,
+            status: payload.status,
+            timestamp: payload.timestamp,
+          },
+          { countUnread: true },
+        );
+        this.sendReadReceipts();
+        break;
+      case 'message_ack':
+        this.updateMessage(payload.channelId, payload.id, {
+          status: payload.status === 'read' ? 'read' : 'sent',
+          timestamp: payload.timestamp,
+        });
+        break;
+      case 'message_update':
+        if (payload.status === 'read') this.updateMessage(payload.channelId, payload.id, { status: 'read' });
+        break;
+      case 'typing_indicator':
+        if (payload.channelId === this.currentChannel && payload.userId !== this.session?.user.id) {
+          this.showTyping(payload.userId, payload.username);
+        }
+        break;
+      case 'presence_update':
+        this.users.set(payload.userId, {
+          ...this.users.get(payload.userId),
+          id: payload.userId,
+          username: payload.username,
+          status: payload.status,
+        });
+        this.renderChannelHeader();
+        break;
+      case 'channel_created':
+        if (!this.channels.has(payload.channel.id)) {
+          this.channels.set(payload.channel.id, payload.channel);
+          this.socket?.send('join', { channelId: payload.channel.id });
           this.renderChannelList();
         }
         break;
-      }
-        
-      case 'message_ack': {
-        const msgEl = this.querySelector(`#msg-status-${payload.id}`);
-        if (msgEl) {
-          msgEl.textContent = '✓✓'; // Delivered
-          msgEl.className = 'text-[10px] text-slate-400 font-bold ml-1';
-        }
-        break;
-      }
-      
-      case 'message_update': {
-        const msgEl = this.querySelector(`#msg-status-${payload.id}`);
-        if (msgEl) {
-          if (payload.status === 'read') {
-            msgEl.textContent = '✓✓';
-            msgEl.className = 'text-[10px] text-emerald-400 font-bold ml-1'; // Blue tick style but emerald for branding
+      case 'error':
+        if (payload.ref) {
+          for (const [channelId, list] of this.messages) {
+            if (list.some((m) => m.id === payload.ref) && payload.code !== 'rate_limited') {
+              this.updateMessage(channelId, payload.ref, { status: 'failed' });
+            }
           }
         }
+        showToast(payload.code === 'rate_limited' ? 'You are sending messages too fast.' : payload.message, 'error');
         break;
-      }
-
-      case 'typing_indicator': {
-        if (this.currentChannel === payload.channelId && payload.userId !== this.userId) {
-          this.showTypingIndicator(payload.userId);
-        }
-        break;
-      }
-      
-      case 'presence_update': {
-        if (this.users.has(payload.userId)) {
-          const user = this.users.get(payload.userId);
-          user.status = payload.status;
-          user.last_seen = payload.lastSeen;
-        } else {
-          this.users.set(payload.userId, { id: payload.userId, status: payload.status, last_seen: payload.lastSeen });
-        }
-        break;
-      }
     }
   }
+
+  /** @param {string} state */
+  renderConnection(state) {
+    const labels = { connecting: 'Connecting…', reconnecting: 'Reconnecting…', offline: 'Offline', online: 'Online' };
+    this.$('#conn-status').textContent = labels[/** @type {keyof typeof labels} */ (state)] ?? state;
+    this.$('#my-presence').className =
+      `absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-slate-900 ${state === 'online' ? 'bg-brand-500' : 'bg-slate-500'}`;
+    const banner = this.$('#conn-banner');
+    banner.hidden = state === 'online' || (state === 'connecting' && !this.everConnected);
+    this.$('#conn-banner-text').textContent =
+      'Connection lost. Reconnecting… Messages you send will be delivered when it is back.';
+  }
+
+  // ---- UI events ----------------------------------------------------------
 
   setupEventListeners() {
-    const input = this.querySelector('#message-input');
-    const sendBtn = this.querySelector('#send-btn');
-    
-    sendBtn.addEventListener('click', () => this.sendMessage());
-    
-    input.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') {
-        this.sendMessage();
-      } else {
-        this.handleTyping();
-      }
+    const input = this.$('#message-input');
+    this.$('#composer').addEventListener('submit', (/** @type {Event} */ e) => {
+      e.preventDefault();
+      this.sendMessage();
     });
-  }
-
-  handleTyping() {
-    if (!this.isTyping && this.ws && this.ws.readyState === WebSocket.OPEN) {
-      this.isTyping = true;
-      this.ws.send(JSON.stringify({
-        type: 'typing',
-        payload: { channelId: this.currentChannel }
-      }));
+    input.addEventListener('input', () => {
+      this.renderCharCount();
+      if (input.value.trim()) this.sendTyping();
+    });
+    this.$('#channel-search').addEventListener('input', () => this.renderChannelList());
+    this.$('#new-channel-form').addEventListener('submit', (/** @type {Event} */ e) => {
+      e.preventDefault();
+      this.createChannel();
+    });
+    this.$('#logout-btn').addEventListener('click', () => this.endSession());
+    this.$('#open-sidebar-btn').addEventListener('click', () => this.toggleSidebar(true));
+    this.$('#close-sidebar-btn').addEventListener('click', () => this.toggleSidebar(false));
+    this.$('#sidebar-backdrop').addEventListener('click', () => this.toggleSidebar(false));
+    this.$('#load-older-btn').addEventListener('click', () => this.loadOlder());
+    this.addEventListener('keydown', (/** @type {KeyboardEvent} */ e) => {
+      if (e.key === 'Escape') this.toggleSidebar(false);
+    });
+    if (!this.visibilityListener) {
+      this.visibilityListener = () => {
+        if (document.visibilityState === 'visible') this.sendReadReceipts();
+      };
+      document.addEventListener('visibilitychange', this.visibilityListener);
     }
-    
-    clearTimeout(this.typingTimeout);
-    this.typingTimeout = setTimeout(() => {
-      this.isTyping = false;
-    }, 2000);
   }
 
-  showTypingIndicator(userId) {
-    const indicator = this.querySelector('#typing-indicator');
-    const user = this.users.get(userId);
-    const name = user ? (user.username || 'Someone') : 'Someone';
-    
-    indicator.innerHTML = `${name} is typing <span class="inline-flex gap-0.5 items-center ml-1"><span class="w-1 h-1 bg-slate-400 rounded-full animate-bounce"></span><span class="w-1 h-1 bg-slate-400 rounded-full animate-bounce [animation-delay:0.2s]"></span><span class="w-1 h-1 bg-slate-400 rounded-full animate-bounce [animation-delay:0.4s]"></span></span>`;
-    indicator.classList.remove('hidden');
-    
-    clearTimeout(this.indicatorTimeout);
-    this.indicatorTimeout = setTimeout(() => {
-      indicator.classList.add('hidden');
-    }, 3000);
+  /** @param {boolean} open */
+  toggleSidebar(open) {
+    const sidebar = this.$('#sidebar');
+    if (!sidebar) return;
+    sidebar.classList.toggle('-translate-x-full', !open);
+    // keeps the off-canvas sidebar out of the tab order on small screens
+    sidebar.classList.toggle('invisible', !open);
+    this.$('#sidebar-backdrop').hidden = !open;
+    const opener = this.$('#open-sidebar-btn');
+    opener.setAttribute('aria-expanded', String(open));
+    if (open) this.$('#channel-search').focus();
+    else if (document.activeElement && sidebar.contains(document.activeElement) && window.innerWidth < 768)
+      opener.focus();
+  }
+
+  renderCharCount() {
+    const len = [...this.$('#message-input').value].length;
+    const counter = this.$('#char-count');
+    counter.hidden = len < MESSAGE_MAX_LENGTH * 0.8;
+    counter.textContent = `${len}/${MESSAGE_MAX_LENGTH}`;
+  }
+
+  sendTyping() {
+    const now = Date.now();
+    if (now - this.lastTypingSentAt < TYPING_THROTTLE_MS) return;
+    if (this.socket?.send('typing', { channelId: this.currentChannel })) this.lastTypingSentAt = now;
   }
 
   sendMessage() {
-    const input = this.querySelector('#message-input');
+    const input = this.$('#message-input');
     const content = input.value.trim();
-    
-    if (content && this.ws && this.ws.readyState === WebSocket.OPEN) {
-      const msgId = this.generateUUID();
-      const timestamp = Date.now();
-      
-      const msgPayload = {
-        id: msgId,
-        channelId: this.currentChannel,
-        content: content
-      };
-      
-      this.ws.send(JSON.stringify({
-        type: 'message',
-        payload: msgPayload
-      }));
-      
-      // Optimistic render
-      const msg = {
-        id: msgId,
+    if (!content || !this.session || !this.socket) return;
+    if ([...content].length > MESSAGE_MAX_LENGTH) {
+      showToast(`Messages are limited to ${MESSAGE_MAX_LENGTH} characters.`, 'error');
+      return;
+    }
+    const id = uuid();
+    input.value = '';
+    this.renderCharCount();
+    this.lastTypingSentAt = 0;
+    this.addMessage(
+      {
+        id,
         channel_id: this.currentChannel,
-        user_id: this.userId,
-        content: content,
-        timestamp: timestamp,
-        status: 'sending'
-      };
-      
-      if (!this.messages.has(this.currentChannel)) {
-        this.messages.set(this.currentChannel, []);
-      }
-      this.messages.get(this.currentChannel).push(msg);
-      
-      this.appendMessage({ userId: this.userId, content, timestamp, status: 'sending', id: msgId });
-      this.scrollToBottom();
-      
+        user_id: this.session.user.id,
+        content,
+        status: 'sending',
+        timestamp: Date.now(),
+      },
+      { scroll: true },
+    );
+    this.socket.sendMessage({ id, channelId: this.currentChannel, content });
+  }
+
+  async createChannel() {
+    const input = this.$('#new-channel-input');
+    const button = this.$('#new-channel-form button');
+    const name = input.value.trim();
+    if (!name || button.disabled) return;
+    button.disabled = true;
+    try {
+      const channel = await this.api('/api/channels', { method: 'POST', body: { name } });
       input.value = '';
-      this.isTyping = false;
+      if (!this.channels.has(channel.id)) {
+        this.channels.set(channel.id, channel);
+        this.socket?.send('join', { channelId: channel.id });
+      }
+      await this.selectChannel(channel.id);
+      showToast(`Channel “${channel.name}” created.`);
+    } catch (error) {
+      if (!this.handleAuthError(error)) showToast(/** @type {Error} */ (error).message, 'error');
+    } finally {
+      button.disabled = false;
     }
   }
+
+  // ---- channels -----------------------------------------------------------
 
   renderChannelList() {
-    const list = this.querySelector('#channel-list');
-    list.innerHTML = '';
-    
-    const channelEl = document.createElement('div');
-    const isActive = this.currentChannel === 'general';
-    channelEl.className = `flex items-center gap-3 p-4 cursor-pointer hover:bg-slate-800/40 transition duration-150 ${isActive ? 'bg-slate-800/60 border-l-4 border-brand-500' : ''}`;
-    
-    channelEl.innerHTML = `
-      <div class="w-11 h-11 rounded-xl bg-slate-800 border border-slate-700/60 flex items-center justify-center font-bold text-brand-500">#</div>
-      <div class="flex-1 min-w-0">
-        <div class="flex justify-between items-baseline mb-0.5">
-          <span class="font-medium text-slate-200 truncate">General</span>
-        </div>
-        <p class="text-xs text-slate-500 truncate">Welcome to real-time chat</p>
-      </div>
-    `;
-    
-    channelEl.onclick = () => this.selectChannel('general');
-    list.appendChild(channelEl);
+    const list = this.$('#channel-list');
+    if (!list) return;
+    const filter = this.$('#channel-search').value.trim().toLowerCase();
+    const items = [...this.channels.values()].filter((c) => !filter || c.name.toLowerCase().includes(filter));
+    list.replaceChildren(
+      ...items.map((channel) => {
+        const active = channel.id === this.currentChannel;
+        const unread = this.unread.get(channel.id) ?? 0;
+        const button = el('button', {
+          className: `w-full flex items-center gap-3 p-4 text-left hover:bg-slate-800/50 transition ${active ? 'bg-slate-800/70 border-l-4 border-brand-500' : 'border-l-4 border-transparent'}`,
+          attrs: { type: 'button', ...(active ? { 'aria-current': 'page' } : {}) },
+          children: [
+            el('span', {
+              className:
+                'w-10 h-10 shrink-0 rounded-xl bg-slate-800 border border-slate-700/60 flex items-center justify-center font-bold text-brand-500',
+              text: '#',
+              attrs: { 'aria-hidden': 'true' },
+            }),
+            el('span', { className: 'flex-1 min-w-0 font-medium text-slate-200 truncate', text: channel.name }),
+            unread > 0 &&
+              el('span', {
+                className:
+                  'min-w-[1.5rem] px-1.5 py-0.5 rounded-full bg-brand-600 text-white text-xs font-semibold text-center',
+                text: unread > 99 ? '99+' : String(unread),
+                attrs: { 'aria-label': `${unread} unread` },
+              }),
+          ],
+        });
+        button.addEventListener('click', () => {
+          this.selectChannel(channel.id);
+          this.toggleSidebar(false);
+        });
+        return el('li', { children: [button] });
+      }),
+    );
+    this.$('#channel-empty').hidden = items.length > 0;
   }
 
-  selectChannel(channelId) {
+  renderChannelHeader() {
+    const channel = this.channels.get(this.currentChannel);
+    const nameEl = this.$('#current-channel-name');
+    if (!nameEl) return;
+    nameEl.textContent = channel ? `# ${channel.name}` : '';
+    const online = [...this.users.values()].filter((u) => u.status === 'online').length;
+    this.$('#current-channel-status').textContent = `${online} online`;
+    document.title = channel ? `#${channel.name} - NexusChat` : 'NexusChat';
+  }
+
+  /** @param {string} channelId */
+  async selectChannel(channelId) {
+    if (!channelId) return;
     this.currentChannel = channelId;
-    
-    // Update headers and panel visibility
-    this.querySelector('#chat-header').style.visibility = 'visible';
-    this.querySelector('#chat-input-area').style.visibility = 'visible';
-    this.querySelector('#current-channel-name').textContent = 'General Workspace';
-    this.querySelector('#current-channel-status').textContent = 'Open team communication room';
-    
+    this.unread.delete(channelId);
+    this.typingUsers.forEach((t) => clearTimeout(t));
+    this.typingUsers.clear();
+    this.renderTyping();
+    this.renderChannelHeader();
     this.renderChannelList();
-    this.renderMessages();
-  }
 
-  renderMessages() {
-    const container = this.querySelector('#chat-messages');
-    container.innerHTML = '';
-    
-    const msgs = this.messages.get(this.currentChannel) || [];
-    msgs.forEach(msg => {
-      this.appendMessage({
-        id: msg.id,
-        userId: msg.user_id,
-        content: msg.content,
-        timestamp: msg.timestamp,
-        status: msg.status
-      }, container);
-    });
-    
-    this.scrollToBottom();
-  }
-
-  appendMessage(msgData, container = this.querySelector('#chat-messages')) {
-    const isMe = msgData.userId === this.userId;
-    const user = this.users.get(msgData.userId);
-    const username = isMe ? 'You' : (user ? user.username : 'Unknown');
-    
-    const time = new Date(msgData.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    
-    let statusTicks = '';
-    let tickColorClass = 'text-slate-500';
-    if (isMe) {
-      let icon = '✓'; 
-      if (msgData.status === 'sent') icon = '✓';
-      if (msgData.status === 'delivered') icon = '✓✓';
-      if (msgData.status === 'read') { icon = '✓✓'; tickColorClass = 'text-emerald-400'; }
-      
-      statusTicks = `<span class="text-[10px] ${tickColorClass} font-bold ml-1" id="msg-status-${msgData.id}">${icon}</span>`;
+    if (!this.messages.has(channelId)) {
+      this.$('#message-list').replaceChildren();
+      this.setMessagesState('Loading messages…');
+      try {
+        const history = await this.api(`/api/channels/${encodeURIComponent(channelId)}/messages?limit=${HISTORY_PAGE}`);
+        if (!this.messages.has(channelId)) this.messages.set(channelId, []);
+        for (const m of history) this.addMessage(m, { render: false });
+        this.hasOlder.set(channelId, history.length === HISTORY_PAGE);
+      } catch (error) {
+        if (this.handleAuthError(error)) return;
+        if (this.currentChannel === channelId) {
+          this.setMessagesState("Couldn't load messages.", () => this.selectChannel(channelId));
+        }
+        return;
+      }
     }
+    if (this.currentChannel !== channelId) return;
+    this.renderMessages();
+    this.sendReadReceipts();
+    if (window.innerWidth >= 768) this.$('#message-input').focus();
+  }
 
-    const wrapperEl = document.createElement('div');
-    wrapperEl.className = `flex w-full mb-1 animate-[fadeIn_0.2s_ease-out] ${isMe ? 'justify-end' : 'justify-start'}`;
-    
-    const bubbleEl = document.createElement('div');
-    bubbleEl.className = `max-w-[70%] px-4 py-2.5 rounded-2xl shadow-sm ${
-      isMe 
-        ? 'bg-emerald-600/90 text-white rounded-tr-none' 
-        : 'bg-slate-800/80 text-slate-100 rounded-tl-none border border-slate-700/30'
-    }`;
-    
-    const senderHtml = !isMe ? `<div class="text-xs font-semibold text-brand-500 mb-1">${username}</div>` : '';
-    
-    bubbleEl.innerHTML = `
-      ${senderHtml}
-      <div class="text-sm break-words leading-relaxed">${this.escapeHTML(msgData.content)}</div>
-      <div class="flex items-center justify-end gap-1 mt-1 text-[9px] text-slate-300 select-none">
-        <span>${time}</span>
-        ${statusTicks}
-      </div>
-    `;
-    
-    wrapperEl.appendChild(bubbleEl);
-    container.appendChild(wrapperEl);
+  async loadOlder() {
+    const channelId = this.currentChannel;
+    const list = this.messages.get(channelId) ?? [];
+    const oldest = list.find((m) => m.status !== 'sending' && m.status !== 'failed');
+    const button = this.$('#load-older-btn');
+    if (!oldest || button.disabled) return;
+    button.disabled = true;
+    const scroller = this.$('#chat-messages');
+    const fromBottom = scroller.scrollHeight - scroller.scrollTop;
+    try {
+      const older = await this.api(
+        `/api/channels/${encodeURIComponent(channelId)}/messages?before=${oldest.timestamp}&limit=${HISTORY_PAGE}`,
+      );
+      const known = new Set(list.map((m) => m.id));
+      list.unshift(...older.filter((/** @type {ChatMessage} */ m) => !known.has(m.id)));
+      this.hasOlder.set(channelId, older.length === HISTORY_PAGE);
+      if (this.currentChannel === channelId) {
+        this.renderMessages({ scroll: false });
+        scroller.scrollTop = scroller.scrollHeight - fromBottom;
+      }
+    } catch (error) {
+      if (!this.handleAuthError(error)) showToast(/** @type {Error} */ (error).message, 'error');
+    } finally {
+      button.disabled = false;
+    }
+  }
+
+  // ---- messages -----------------------------------------------------------
+
+  /**
+   * @param {string} text
+   * @param {() => void} [retry]
+   */
+  setMessagesState(text, retry) {
+    const state = this.$('#messages-state');
+    if (!state) return;
+    state.hidden = !text;
+    state.replaceChildren(
+      el('p', { text }),
+      retry &&
+        (() => {
+          const b = el('button', {
+            className: 'mt-3 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200',
+            text: 'Try again',
+            attrs: { type: 'button' },
+          });
+          b.addEventListener('click', retry);
+          return b;
+        })(),
+    );
+  }
+
+  /**
+   * Inserts a message (de-duplicated by id) and renders it when visible.
+   * @param {ChatMessage} message
+   * @param {{ render?: boolean, scroll?: boolean, countUnread?: boolean }} [opts]
+   */
+  addMessage(message, { render = true, scroll = false, countUnread = false } = {}) {
+    const channelId = message.channel_id;
+    if (!this.channels.has(channelId)) return;
+    const loaded = this.messages.get(channelId);
+    if (!loaded) {
+      // History not loaded yet: it will arrive complete when the channel is opened.
+      if (countUnread && message.user_id !== this.session?.user.id) this.bumpUnread(channelId);
+      return;
+    }
+    const existing = loaded.find((m) => m.id === message.id);
+    if (existing) {
+      if (existing.status === 'sending' || (message.status === 'read' && existing.status !== 'read')) {
+        this.updateMessage(channelId, message.id, { status: message.status, timestamp: message.timestamp });
+      }
+      return;
+    }
+    loaded.push(message);
+    if (channelId !== this.currentChannel) {
+      if (countUnread && message.user_id !== this.session?.user.id) this.bumpUnread(channelId);
+      return;
+    }
+    if (!render) return;
+    const scroller = this.$('#chat-messages');
+    const nearBottom = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 120;
+    this.$('#messages-state').hidden = true;
+    this.$('#message-list').append(this.renderMessage(message));
+    if (scroll || nearBottom) this.scrollToBottom();
+  }
+
+  /** @param {string} channelId */
+  bumpUnread(channelId) {
+    this.unread.set(channelId, (this.unread.get(channelId) ?? 0) + 1);
+    this.renderChannelList();
+  }
+
+  /**
+   * @param {string} channelId
+   * @param {string} id
+   * @param {Partial<ChatMessage>} changes
+   */
+  updateMessage(channelId, id, changes) {
+    const message = this.messages.get(channelId)?.find((m) => m.id === id);
+    if (!message) return;
+    // Never downgrade "read" back to "sent" (acks and receipts can race).
+    if (message.status === 'read' && changes.status && changes.status !== 'read') delete changes.status;
+    Object.assign(message, Object.fromEntries(Object.entries(changes).filter(([, v]) => v !== undefined)));
+    const node = this.querySelector(`li[data-id="${CSS.escape(id)}"]`);
+    node?.replaceWith(this.renderMessage(message));
+  }
+
+  /** @param {{ scroll?: boolean }} [opts] */
+  renderMessages({ scroll = true } = {}) {
+    const list = this.messages.get(this.currentChannel) ?? [];
+    this.$('#message-list').replaceChildren(...list.map((m) => this.renderMessage(m)));
+    this.$('#load-older-btn').hidden = !this.hasOlder.get(this.currentChannel);
+    if (list.length === 0) this.setMessagesState('No messages yet. Say hello!');
+    else this.setMessagesState('');
+    if (scroll) this.scrollToBottom();
+  }
+
+  /** @param {ChatMessage} msg */
+  renderMessage(msg) {
+    const isMe = msg.user_id === this.session?.user.id;
+    const author = isMe ? 'You' : (this.users.get(msg.user_id)?.username ?? msg.username ?? 'Unknown');
+    const date = new Date(msg.timestamp);
+    const status = /** @type {keyof typeof STATUS_LABEL} */ (msg.status in STATUS_LABEL ? msg.status : 'sent');
+
+    return el('li', {
+      className: `flex w-full animate-fade-in ${isMe ? 'justify-end' : 'justify-start'}`,
+      attrs: { 'data-id': msg.id },
+      children: [
+        el('article', {
+          className: `max-w-[85%] sm:max-w-[70%] px-4 py-2.5 rounded-2xl shadow-sm ${
+            isMe
+              ? 'bg-emerald-700 text-white rounded-tr-none'
+              : 'bg-slate-800 text-slate-100 rounded-tl-none border border-slate-700/40'
+          } ${status === 'failed' ? 'ring-1 ring-red-400' : ''}`,
+          attrs: {
+            'aria-label': `${author} at ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
+          },
+          children: [
+            !isMe && el('p', { className: 'text-xs font-semibold text-brand-400 mb-1', text: author }),
+            el('p', { className: 'text-sm whitespace-pre-wrap break-words leading-relaxed', text: msg.content }),
+            el('p', {
+              className: 'flex items-center justify-end gap-1 mt-1 text-[11px] text-slate-300 select-none',
+              children: [
+                el('time', {
+                  attrs: { datetime: date.toISOString(), title: date.toLocaleString() },
+                  text: date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                }),
+                isMe &&
+                  el('span', {
+                    className: `font-bold ${status === 'read' ? 'text-emerald-200' : status === 'failed' ? 'text-red-300' : 'text-slate-300'}`,
+                    text: STATUS_ICON[status],
+                    attrs: { 'aria-label': STATUS_LABEL[status], title: STATUS_LABEL[status], 'data-status': status },
+                  }),
+              ],
+            }),
+          ],
+        }),
+      ],
+    });
+  }
+
+  /** Marks visible messages from other people as read (once per message). */
+  sendReadReceipts() {
+    if (document.visibilityState !== 'visible' || !this.socket?.isOnline || !this.session) return;
+    const list = this.messages.get(this.currentChannel) ?? [];
+    const pending = list
+      .filter((m) => m.user_id !== this.session?.user.id && m.status !== 'read' && !this.receiptsSent.has(m.id))
+      .slice(-50);
+    for (const m of pending) {
+      if (this.socket.send('message_read', { id: m.id, channelId: this.currentChannel })) this.receiptsSent.add(m.id);
+    }
   }
 
   scrollToBottom() {
-    const container = this.querySelector('#chat-messages');
+    const container = this.$('#chat-messages');
     container.scrollTop = container.scrollHeight;
   }
 
-  generateUUID() {
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-      const r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
-      return v.toString(16);
-    });
+  // ---- typing -------------------------------------------------------------
+
+  /** @param {string} userId @param {string} [username] */
+  showTyping(userId, username) {
+    if (username) this.users.set(userId, { ...this.users.get(userId), id: userId, username });
+    clearTimeout(this.typingUsers.get(userId));
+    this.typingUsers.set(
+      userId,
+      setTimeout(() => this.clearTyping(userId), TYPING_DISPLAY_MS),
+    );
+    this.renderTyping();
   }
 
-  escapeHTML(str) {
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
+  /** @param {string} userId */
+  clearTyping(userId) {
+    clearTimeout(this.typingUsers.get(userId));
+    if (this.typingUsers.delete(userId)) this.renderTyping();
+  }
+
+  renderTyping() {
+    const indicator = this.$('#typing-indicator');
+    if (!indicator) return;
+    const names = [...this.typingUsers.keys()].map((id) => this.users.get(id)?.username ?? 'Someone');
+    indicator.textContent =
+      names.length === 0
+        ? ''
+        : names.length === 1
+          ? `${names[0]} is typing…`
+          : names.length === 2
+            ? `${names[0]} and ${names[1]} are typing…`
+            : 'Several people are typing…';
   }
 }
 

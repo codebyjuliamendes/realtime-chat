@@ -1,3 +1,6 @@
+# Single replica on purpose: the database is an in-process SQLite file and
+# WebSocket fan-out is in memory. Running several replicas would split users
+# and history between pods. See SCALE.md before scaling out.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -6,7 +9,9 @@ metadata:
   labels:
     app: realtime-chat
 spec:
-  replicas: 2
+  replicas: 1
+  strategy:
+    type: Recreate # never run two pods against the same volume
   selector:
     matchLabels:
       app: realtime-chat
@@ -15,27 +20,83 @@ spec:
       labels:
         app: realtime-chat
     spec:
+      terminationGracePeriodSeconds: 20
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: realtime-chat
-          image: realtime-chat:latest
+          # Replace with your registry/tag (e.g. ghcr.io/<owner>/realtime-chat:<sha>).
+          image: realtime-chat:2.0.0
+          imagePullPolicy: IfNotPresent
           ports:
-            - containerPort: 3003
+            - name: http
+              containerPort: 3003
+          env:
+            - name: NODE_ENV
+              value: production
+            - name: PORT
+              value: '3003'
+            - name: DB_PATH
+              value: /data/chat.db
+            - name: TRUST_PROXY
+              value: 'true'
+            - name: SESSION_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: realtime-chat
+                  key: session-secret
           resources:
             requests:
-              cpu: "100m"
-              memory: "128Mi"
+              cpu: 100m
+              memory: 128Mi
             limits:
-              cpu: "250m"
-              memory: "256Mi"
+              cpu: 500m
+              memory: 512Mi
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 2
+            failureThreshold: 30
           livenessProbe:
             httpGet:
-              path: /api/channels
-              port: 3003
-            initialDelaySeconds: 10
+              path: /healthz
+              port: http
             periodSeconds: 15
           readinessProbe:
             httpGet:
-              path: /api/channels
-              port: 3003
-            initialDelaySeconds: 5
-            periodSeconds: 10
+              path: /readyz
+              port: http
+            periodSeconds: 5
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ['ALL']
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: realtime-chat-data
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: realtime-chat-data
+  namespace: default
+spec:
+  accessModes: ['ReadWriteOnce']
+  resources:
+    requests:
+      storage: 1Gi

@@ -1,2 +1,24 @@
-node_modules/  
-.env 
+# dependencies
+node_modules/
+
+# runtime data (SQLite file, dev session secret)
+data/
+*.db
+*.db.*.tmp
+
+# build output
+public/assets/
+coverage/
+
+# env & secrets
+.env
+.env.*
+!.env.example
+
+# logs / OS / editors
+npm-debug.log*
+*.log
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

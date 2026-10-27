@@ -6,7 +6,7 @@ export class LRUCache {
 
   get(key) {
     if (!this.cache.has(key)) return null;
-    
+
     // Refresh position by deleting and re-inserting
     const val = this.cache.get(key);
     this.cache.delete(key);

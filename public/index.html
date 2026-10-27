@@ -1,108 +1,81 @@
-<!DOCTYPE html>
-<html lang="en" class="h-full bg-slate-950">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>NexusChat - Real-Time Enterprise Messenger</title>
-  <!-- Tailwind CSS CDN -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          colors: {
-            brand: {
-              50: '#f0fdf4',
-              100: '#dcfce7',
-              500: '#22c55e',
-              600: '#16a34a',
-              700: '#15803d',
-            }
-          }
-        }
-      }
-    }
-  </script>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <style>
-    body {
-      font-family: 'Inter', sans-serif;
-    }
-  </style>
-</head>
-<body class="h-full text-slate-100 flex items-center justify-center overflow-hidden">
-  
-  <!-- Login Container -->
-  <div id="login-container" class="w-full h-full flex items-center justify-center bg-slate-950 relative">
-    <!-- Abstract glowing backgrounds -->
-    <div class="absolute w-80 h-80 bg-brand-500/10 rounded-full blur-3xl -top-10 -left-10"></div>
-    <div class="absolute w-96 h-96 bg-blue-500/10 rounded-full blur-3xl -bottom-10 -right-10"></div>
+<!doctype html>
+<html lang="en" class="h-full">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#020617" />
+    <meta name="description" content="NexusChat: real-time chat over WebSockets." />
+    <title>NexusChat - Real-Time Messenger</title>
+    <link rel="stylesheet" href="assets/app.css" />
+    <script src="app.js" type="module"></script>
+  </head>
+  <body class="h-full overflow-hidden">
+    <noscript>
+      <p class="p-6 text-center">NexusChat needs JavaScript enabled.</p>
+    </noscript>
 
-    <div class="w-full max-w-md p-8 bg-slate-900/60 border border-slate-800 rounded-2xl shadow-2xl backdrop-blur-xl text-center z-10 relative">
-      <div class="flex justify-center mb-6">
-        <div class="w-16 h-16 bg-brand-500/10 border border-brand-500/30 rounded-2xl flex items-center justify-center shadow-lg shadow-brand-500/20">
-          <i data-lucide="message-square" class="w-8 h-8 text-brand-500"></i>
+    <!-- Login -->
+    <main
+      id="login-container"
+      class="relative w-full h-full flex items-center justify-center px-4 overflow-hidden"
+      hidden
+    >
+      <div aria-hidden="true" class="absolute w-80 h-80 bg-brand-500/10 rounded-full blur-3xl -top-10 -left-10"></div>
+      <div
+        aria-hidden="true"
+        class="absolute w-96 h-96 bg-blue-500/10 rounded-full blur-3xl -bottom-10 -right-10"
+      ></div>
+
+      <div
+        class="relative z-10 w-full max-w-md p-6 sm:p-8 bg-slate-900/70 border border-slate-800 rounded-2xl shadow-2xl backdrop-blur-xl text-center"
+      >
+        <div class="flex justify-center mb-6">
+          <div
+            class="w-16 h-16 bg-brand-500/10 border border-brand-500/30 rounded-2xl flex items-center justify-center text-brand-500"
+          >
+            <span data-icon="message" data-class="w-8 h-8"></span>
+          </div>
         </div>
+        <h1 class="text-2xl sm:text-3xl font-bold tracking-tight mb-2">Welcome to NexusChat</h1>
+        <p class="text-slate-400 text-sm mb-8">Choose a display name to join the workspace.</p>
+
+        <form id="login-form" class="space-y-4 text-left" novalidate>
+          <div>
+            <label for="username-input" class="block text-sm font-medium text-slate-300 mb-1">Display name</label>
+            <input
+              type="text"
+              id="username-input"
+              name="username"
+              maxlength="32"
+              required
+              autocomplete="nickname"
+              aria-describedby="login-error"
+              class="w-full px-4 py-3 bg-slate-950/80 border border-slate-700 focus:border-brand-500 rounded-xl text-slate-100 font-medium transition"
+            />
+          </div>
+          <p id="login-error" class="min-h-[1.25rem] text-sm text-red-400" role="alert"></p>
+          <button
+            id="login-btn"
+            type="submit"
+            class="w-full py-3 bg-brand-600 hover:bg-brand-500 active:bg-brand-700 disabled:opacity-60 disabled:cursor-wait text-white font-semibold rounded-xl transition shadow-lg shadow-brand-600/30"
+          >
+            Join workspace
+          </button>
+        </form>
+        <p class="mt-6 text-xs text-slate-500">
+          No password: your session is stored in this browser. Signing out removes it from this device.
+        </p>
       </div>
-      <h2 class="text-3xl font-bold tracking-tight mb-2">Welcome to NexusChat</h2>
-      <p class="text-slate-400 text-sm mb-8">Enter a username to join the real-time enterprise workspace.</p>
-      
-      <div class="space-y-4">
-        <input type="text" id="username-input" placeholder="Username" autocomplete="off" autofocus
-          class="w-full px-4 py-3 bg-slate-950/80 border border-slate-800 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 outline-none rounded-xl text-slate-100 font-medium transition duration-200">
-        
-        <button id="login-btn" 
-          class="w-full py-3 bg-brand-600 hover:bg-brand-500 active:bg-brand-700 text-white font-semibold rounded-xl transition duration-200 shadow-lg shadow-brand-600/35">
-          Join Channel
-        </button>
-      </div>
-    </div>
-  </div>
-  
-  <!-- Chat App component mount point -->
-  <chat-app id="chat-app" class="w-full h-full hidden"></chat-app>
+    </main>
 
-  <!-- Toast Container -->
-  <div id="toast-container" class="fixed bottom-4 right-4 flex flex-col gap-2 z-[9999]"></div>
+    <!-- Chat application (rendered in the light DOM so Tailwind classes apply) -->
+    <chat-app id="chat-app" class="block w-full h-full" hidden></chat-app>
 
-  <script src="https://unpkg.com/lucide@latest"></script>
-  <script src="components/chat-app.js" type="module"></script>
-  <script src="app.js" type="module"></script>
-  <script>
-    // Global toast function
-    window.showToast = function(message, type = 'success') {
-      const container = document.getElementById('toast-container');
-      const toast = document.createElement('div');
-      toast.className = `flex items-center p-4 mb-2 text-white bg-slate-800 rounded-lg shadow-lg border-l-4 ${type === 'success' ? 'border-green-500' : 'border-red-500'} transition-all duration-300 ease-in-out transform translate-x-full opacity-0 backdrop-blur-md`;
-      
-      const iconName = type === 'success' ? 'check-circle' : 'alert-circle';
-      toast.innerHTML = `
-        <div class="inline-flex items-center justify-center flex-shrink-0 w-8 h-8 rounded-lg bg-slate-700 mr-3">
-            <i data-lucide="${iconName}" class="w-5 h-5 ${type === 'success' ? 'text-green-500' : 'text-red-500'}"></i>
-        </div>
-        <div class="ml-3 text-sm font-normal">${message}</div>
-      `;
-      
-      container.appendChild(toast);
-      lucide.createIcons();
-      
-      // Animate in
-      requestAnimationFrame(() => {
-        toast.classList.remove('translate-x-full', 'opacity-0');
-      });
-      
-      // Animate out and remove
-      setTimeout(() => {
-        toast.classList.add('translate-x-full', 'opacity-0');
-        setTimeout(() => toast.remove(), 300);
-      }, 3000);
-    };
-
-    // Initialize initial icons
-    document.addEventListener("DOMContentLoaded", () => {
-      lucide.createIcons();
-    });
-  </script>
-</body>
+    <div
+      id="toast-container"
+      class="fixed top-4 right-4 left-4 sm:left-auto flex flex-col items-end gap-2 z-[100]"
+      aria-live="polite"
+    ></div>
+  </body>
 </html>
-
