@@ -1,46 +1,62 @@
-function generateUUID() {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-    const r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
-    return v.toString(16);
-  });
+import './components/chat-app.js';
+import { apiRequest, clearSession, legacyUsername, loadSession, saveSession } from './js/api.js';
+import { hydrateIcons } from './js/dom.js';
+
+const loginContainer = /** @type {HTMLElement} */ (document.getElementById('login-container'));
+const chatApp = /** @type {any} */ (document.getElementById('chat-app'));
+const form = /** @type {HTMLFormElement} */ (document.getElementById('login-form'));
+const usernameInput = /** @type {HTMLInputElement} */ (document.getElementById('username-input'));
+const loginBtn = /** @type {HTMLButtonElement} */ (document.getElementById('login-btn'));
+const loginError = /** @type {HTMLElement} */ (document.getElementById('login-error'));
+
+hydrateIcons();
+
+/** @param {string} [message] */
+function showLogin(message = '') {
+  chatApp.hidden = true;
+  loginContainer.hidden = false;
+  loginError.textContent = message;
+  if (!usernameInput.value) usernameInput.value = legacyUsername();
+  usernameInput.focus();
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-  const loginContainer = document.getElementById('login-container');
-  const chatApp = document.getElementById('chat-app');
-  const loginBtn = document.getElementById('login-btn');
-  const usernameInput = document.getElementById('username-input');
+/** @param {{ token: string, user: { id: string, username: string } }} session */
+function showChat(session) {
+  loginContainer.hidden = true;
+  chatApp.hidden = false;
+  chatApp.start(session);
+}
 
-  // Check if we have a saved user
-  let userId = localStorage.getItem('chat_userId');
-  let username = localStorage.getItem('chat_username');
+chatApp.addEventListener('session-ended', (/** @type {CustomEvent} */ e) => {
+  clearSession();
+  showLogin(e.detail?.reason ?? '');
+});
+chatApp.addEventListener('token-refreshed', (/** @type {CustomEvent} */ e) => saveSession(e.detail));
 
-  if (userId && username) {
-    initApp(userId, username);
+form.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  if (loginBtn.disabled) return; // prevents double submission
+  const username = usernameInput.value.trim();
+  if (!username) {
+    loginError.textContent = 'Please enter a display name.';
+    usernameInput.focus();
+    return;
   }
-
-  loginBtn.addEventListener('click', () => {
-    const name = usernameInput.value.trim();
-    if (name) {
-      userId = generateUUID();
-      username = name;
-      localStorage.setItem('chat_userId', userId);
-      localStorage.setItem('chat_username', username);
-      initApp(userId, username);
-    }
-  });
-
-  usernameInput.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') {
-      loginBtn.click();
-    }
-  });
-
-  function initApp(uid, uname) {
-    loginContainer.style.display = 'none';
-    chatApp.style.display = 'block';
-    
-    // Pass config to web component
-    chatApp.initialize(uid, uname);
+  loginBtn.disabled = true;
+  loginBtn.textContent = 'Joining…';
+  loginError.textContent = '';
+  try {
+    const session = await apiRequest('/api/session', { method: 'POST', body: { username } });
+    saveSession(session);
+    showChat(session);
+  } catch (error) {
+    loginError.textContent = /** @type {Error} */ (error).message;
+  } finally {
+    loginBtn.disabled = false;
+    loginBtn.textContent = 'Join workspace';
   }
 });
+
+const existing = loadSession();
+if (existing) showChat(existing);
+else showLogin();
